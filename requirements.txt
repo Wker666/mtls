@@ -1,0 +1,5 @@
+colorama==0.4.6
+cryptography==46.0.3
+h11==0.16.0
+rich==14.2.0
+textual==6.11.0

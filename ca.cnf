@@ -1,0 +1,22 @@
+# ca.cnf
+[ req ]
+default_bits        = 4096
+prompt              = no
+default_md          = sha256
+encrypt_key         = no
+distinguished_name  = req_distinguished_name
+x509_extensions     = v3_ca
+
+[ req_distinguished_name ]
+countryName         = CN
+stateOrProvinceName = Dev
+localityName        = Dev
+organizationName    = MySoftware
+organizationalUnitName = Dev
+commonName          = MySoftware-Root-CA
+
+[ v3_ca ]
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+basicConstraints       = critical, CA:true, pathlen:0
+keyUsage               = critical, digitalSignature, keyCertSign, cRLSign
