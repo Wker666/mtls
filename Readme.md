@@ -76,8 +76,8 @@ options:
 
 ```bash
 # 打印日志
-python main.py -s plugins/log.py
+python mtls.py -s plugins/log.py
 # 查看http请求
-python main.py -s plugins/http.py
+python mtls.py -s plugins/http.py
 
 ```
