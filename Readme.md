@@ -1,7 +1,14 @@
 # Tls中间人劫持
 
-支持TCP流量的TLS中间人攻击，实现将TLS流量中的加密内容提取实现修改和查看。
+支持TCP流量的TLS中间人攻击，在网关上游配置路由实现tls流量解密，将TLS流量中的加密内容提取实现修改和查看。
 
+通过插件的方式实现功能扩展，目前支持的功能有：
+- 打印日志
+![log](pic/2.png)
+- 查看http请求
+![http](pic/1.png)
+
+# 环境配置
 
 ## 生成证书
 
@@ -35,8 +42,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## 运行 tls 中间人劫持
+# 运行示例
 
+## 运行 tls 中间人劫持
 
 参数说明：
 
