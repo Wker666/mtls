@@ -267,6 +267,36 @@ class ConnListApp(App):
         ("i", "open_detail", "查看详情"),
     ]
 
+    METHOD_STYLES = {
+        "get": "green",
+        "post": "yellow",
+        "put": "cyan",
+        "delete": "red",
+        "patch": "magenta",
+    }
+
+    CONTENT_TYPE_SUBSTRING_STYLES = {
+        "text/html": "cyan",
+        "application/json": "green",
+        "+json": "green",
+        "image/": "magenta",
+        "video/": "yellow",
+        "javascript": "bright_yellow",
+        "css": "bright_cyan",
+    }
+
+    STATUS_STYLES = [
+        (500, "bright_red"),
+        (400, "red"),
+        (300, "yellow"),
+        (200, "green"),
+    ]
+
+    SIZE_STYLES = [
+        (1024 * 1024, "red", "{:.2f} MB"),
+        (1024, "yellow", "{:.1f} KB"),
+    ]
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.row_for_id: dict[int, int] = {}
@@ -286,8 +316,8 @@ class ConnListApp(App):
             ("URL", "url"),
             ("Status", "status"),
             ("Size", "size"),
-            ("Start Time", "start"),
-            ("End Time", "end"),
+            ("Content-Type", "content_type"),
+            ("Duration", "duration"),
         )
         yield self.table
 
@@ -300,33 +330,22 @@ class ConnListApp(App):
     def on_mount(self) -> None:
         self.set_interval(0.2, self._poll_events)
 
-    def _fmt_time(self, ts: float | None) -> str:
-        if ts is None:
-            return ""
-        return datetime.fromtimestamp(ts).strftime("%H:%M:%S")
+    def _get_content_type_style(self, content_type: str) -> str:
+        content_type_lower = (content_type or "").lower()
+        for substring, style in self.CONTENT_TYPE_SUBSTRING_STYLES.items():
+            if substring in content_type_lower:
+                return style
+        return "white"
 
     def _style_url(self, url: str, content_type: str | None = None, max_len: int = 60) -> Text:
         full_url = url or ""
-        content_type = (content_type or "").lower()
 
         display_url = full_url
         if len(display_url) > max_len:
             display_url = display_url[: max_len - 3] + "..."
 
-        color = "white"
-        if "text/html" in content_type:
-            color = "cyan"
-        elif "application/json" in content_type or "+json" in content_type:
-            color = "green"
-        elif content_type.startswith("image/"):
-            color = "magenta"
-        elif content_type.startswith("video/"):
-            color = "yellow"
-        elif "javascript" in content_type:
-            color = "bright_yellow"
-        elif "css" in content_type:
-            color = "bright_cyan"
-        else:
+        color = self._get_content_type_style(content_type or "")
+        if color == "white":  # Fallback to extension
             lower = full_url.lower()
             if lower.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg")):
                 color = "magenta"
@@ -350,19 +369,21 @@ class ConnListApp(App):
                 break
 
             if ev.type == "request":
-                start_str = self._fmt_time(ev.ts)
                 host_port = f"{ev.host}:{ev.port}" if ev.host else ""
                 url_rich = self._style_url(ev.url, None)
+
+                method_style = self.METHOD_STYLES.get(ev.method.lower(), "white")
+                method_text = Text(ev.method, style=method_style)
 
                 row_key = self.table.add_row(
                     str(ev.id),
                     host_port,
-                    ev.method,
+                    method_text,
                     url_rich,
                     "",
                     "",
-                    start_str,
-                    "",
+                    "(no-content)",
+                    "-",
                 )
                 self.row_for_id[ev.id] = row_key
                 self.id_for_row[row_key] = ev.id
@@ -373,21 +394,50 @@ class ConnListApp(App):
             elif ev.type == "response":
                 row_key = self.row_for_id.get(ev.id)
                 if row_key is not None:
-                    end_str = self._fmt_time(ev.ts)
-                    self.table.update_cell(row_key, self.get_column_key(4), str(ev.status))
+                    status_code = ev.status
+                    status_style = "white"
+                    if status_code:
+                        for code, style in self.STATUS_STYLES:
+                            if status_code >= code:
+                                status_style = style
+                                break
+                    status_text = Text(str(status_code), style=status_style)
+                    self.table.update_cell(row_key, self.get_column_key(4), status_text)
 
-                    size_str = f"{ev.size} B"
-                    if ev.size > 1024:
-                        size_str = f"{ev.size / 1024:.1f} KB"
-                    if ev.size > 1024 * 1024:
-                        size_str = f"{ev.size / 1024 / 1024:.2f} MB"
-                    self.table.update_cell(row_key, self.get_column_key(5), size_str)
+                    size = ev.size
+                    size_str, size_style = f"{size} B", "white"
+                    for limit, style, fmt in self.SIZE_STYLES:
+                        if size > limit:
+                            size_str = fmt.format(size / limit)
+                            size_style = style
+                            break
+                    size_text = Text(size_str, style=size_style)
+                    self.table.update_cell(row_key, self.get_column_key(5), size_text)
+
+                    content_type_str = ev.content_type.split(';')[0]
+                    content_type_style = self._get_content_type_style(content_type_str)
+                    if content_type_str != "":
+                        content_type_text = Text(content_type_str, style=content_type_style)
+                        self.table.update_cell(row_key, self.get_column_key(6), content_type_text)
 
                     full_url = self.url_for_id.get(ev.id, ev.url)
                     new_url_rich = self._style_url(full_url, ev.content_type)
                     self.table.update_cell(row_key, self.get_column_key(3), new_url_rich)
 
-                    self.table.update_cell(row_key, self.get_column_key(7), end_str)
+                    duration_str = "-"
+                    duration_style = "white"
+                    start_ts = self.start_ts_for_id.get(ev.id)
+                    if start_ts:
+                        duration = ev.ts - start_ts
+                        if duration < 1:
+                            duration_ms = duration * 1000
+                            duration_str = f"{duration_ms:.0f}ms"
+                            duration_style = "green" if duration_ms < 500 else "yellow"
+                        else:
+                            duration_str = f"{duration:.2f}s"
+                            duration_style = "yellow" if duration < 2 else "red"
+                    duration_text = Text(duration_str, style=duration_style)
+                    self.table.update_cell(row_key, self.get_column_key(7), duration_text)
 
     async def action_open_detail(self) -> None:
         """在当前选中行上打开详情页面。"""
