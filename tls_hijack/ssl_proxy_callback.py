@@ -1,4 +1,4 @@
-from tls_hjick.ssl_client import DisconnectionReason
+from tls_hijack.ssl_client import DisconnectionReason
 
 
 class SslProxyCallback:

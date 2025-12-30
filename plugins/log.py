@@ -1,5 +1,5 @@
-from tls_hjick.ssl_client import DisconnectionReason
-from tls_hjick.ssl_proxy_callback import SslProxyCallback
+from tls_hijack.ssl_client import DisconnectionReason
+from tls_hijack.ssl_proxy_callback import SslProxyCallback
 
 
 class LoggingProxyCallback(SslProxyCallback):

@@ -1,74 +1,100 @@
 import socket
+import ssl
 import threading
 import select
 from enum import Enum, auto
 from typing import Callable, Optional
 
-from tls_hjick.disconnect_reason import DisconnectionReason
+from tls_hijack.disconnect_reason import DisconnectionReason
 
 
-MessageCallback = Callable[["TcpClient", bytes], None]
-DisconnectionCallback = Callable[["TcpClient", DisconnectionReason], None]
+# 回调类型定义
+MessageCallback = Callable[["SslClient", bytes], None]
+DisconnectionCallback = Callable[["SslClient", DisconnectionReason], None]
 
 
-class TcpClient:
+class SslClient:
     def __init__(
         self,
         host: str,
         port: int,
-        ca_file_or_callback,              # 保持同名同位置，但对 TCP 来说其实不用
-        verify_cert: bool = True,         # 保持签名，为了兼容；对 TCP 无意义
+        ca_file_or_callback,
+        verify_cert: bool = True,
         maybe_callback: Optional[MessageCallback] = None,
         timeout: float = 5,
     ):
-        """
-        保持与 SslClient 相同的构造签名：
-
-        - TcpClient(host, port, ca_file, message_callback)
-        - TcpClient(host, port, message_callback)  # 第三个参数是回调
-        """
         self.host = host
         self.port = port
-        self.verify_cert = verify_cert      # 对 TCP 没意义，但保留字段以兼容
+        self.verify_cert = verify_cert
         self.timeout = timeout
 
-        # 兼容原来的两种构造方式
+        # 判断是 (host, port, callback) 还是 (host, port, ca_file, callback)
         if callable(ca_file_or_callback) and maybe_callback is None:
-            # TcpClient(host, port, message_callback)
-            self.ca_file: Optional[str] = None  # 无用字段，仅保留
+            # SslClient(host, port, message_callback)
+            self.ca_file: Optional[str] = None
             self.message_callback: MessageCallback = ca_file_or_callback
         else:
-            # TcpClient(host, port, ca_file, message_callback)
-            self.ca_file = ca_file_or_callback   # 无用字段，仅保留
+            # SslClient(host, port, ca_file, message_callback)
+            self.ca_file = ca_file_or_callback
             if maybe_callback is None:
                 raise ValueError("message_callback must be provided")
             self.message_callback = maybe_callback
 
         self.disconnection_callback: Optional[DisconnectionCallback] = None
 
-        # 对于 TCP 版本，不需要 SSL 上下文和 SSLSocket
-        self.sock: Optional[socket.socket] = None
+        self.context: ssl.SSLContext = self._create_context()
+        self.ssl_sock: Optional[ssl.SSLSocket] = None
 
         self.running = False
         self.receive_thread: Optional[threading.Thread] = None
         self.disconnection_reason: DisconnectionReason = DisconnectionReason.NoneReason
 
-        # 使用 socketpair 模拟 C++ 的 interruptPipes[2]
         self._r_interrupt, self._w_interrupt = socket.socketpair()
+
+    # ---------- 上下文初始化 ----------
+
+    def _create_context(self) -> ssl.SSLContext:
+        # 默认创建一个面向服务器认证的上下文
+        if self.verify_cert:
+            context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+
+            if self.ca_file is not None:
+                context.load_verify_locations(cafile=self.ca_file)
+
+            context.check_hostname = True
+            context.verify_mode = ssl.CERT_REQUIRED
+        else:
+            # 不校验证书 / 不校验 hostname —— 用于自签名或测试环境
+            context = ssl._create_unverified_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+
+        return context
 
     # --------------------------- 连接、发送 ---------------------------
 
     def connectToServer(self) -> bool:
-        """
-        与 SslClient.connectToServer 接口一致，只是直接建立 TCP 连接，不做 SSL 包装。
-        """
         try:
-            sock = socket.create_connection((self.host, self.port))
+            raw_sock = socket.create_connection((self.host, self.port))
         except OSError as e:
             print("socket/connect error:", e)
             return False
 
-        self.sock = sock
+        try:
+            self.ssl_sock = self.context.wrap_socket(
+                raw_sock,
+                server_hostname=self.host,  # SNI & 主机名校验
+            )
+        except ssl.SSLError as e:
+            print("SSL connect error:", e)
+            raw_sock.close()
+            return False
+        except Exception as e:
+            print("SSL connect error:", e)
+            raw_sock.close()
+            return False
+
+
         self.running = True
         self.disconnection_reason = DisconnectionReason.NoneReason
 
@@ -80,10 +106,7 @@ class TcpClient:
         return True
 
     def sendMessage(self, message: bytes, length: Optional[int] = None) -> bool:
-        """
-        保持与 SslClient.sendMessage 完全一致的签名和行为，只是改为使用裸 TCP socket。
-        """
-        if not self.sock:
+        if not self.ssl_sock:
             return False
 
         if length is not None:
@@ -92,10 +115,10 @@ class TcpClient:
             data = message
 
         try:
-            self.sock.sendall(data)
+            self.ssl_sock.sendall(data)
             return True
         except OSError as e:
-            print("TCP write error:", e)
+            print("SSL write error:", e)
             # 写失败视为被动断开
             self._finish(DisconnectionReason.Passive)
             return False
@@ -104,24 +127,23 @@ class TcpClient:
 
     def _receive_loop(self):
         """
-        与 SslClient._receive_loop 保持同样逻辑：
-        - select 监听 sock 和 _r_interrupt
+        - select 监听 ssl_sock 和 _r_interrupt
         - 中断可读 => Active
         - 服务器关闭 / 出错 => Passive
         - 退出循环后统一调用 _finish，确保只调用一次回调
         """
         buffer_size = 4096
 
-        while self.running and self.sock:
+        while self.running and self.ssl_sock:
             try:
                 rlist, _, _ = select.select(
-                    [self.sock, self._r_interrupt],
+                    [self.ssl_sock, self._r_interrupt],
                     [],
                     [],
                     self.timeout if self.timeout != -1 else None
                 )
             except OSError as e:
-                print("select error in TcpClient:", e)
+                print("select error in SslClient:", e)
                 self._finish(DisconnectionReason.Passive)
                 return
 
@@ -139,11 +161,11 @@ class TcpClient:
                 return
 
             # 服务器数据
-            if self.sock in rlist:
+            if self.ssl_sock in rlist:
                 try:
-                    data = self.sock.recv(buffer_size)
+                    data = self.ssl_sock.recv(buffer_size)
                 except OSError as e:
-                    print("TCP read error in TcpClient:", e)
+                    print("SSL read error in SslClient:", e)
                     self._finish(DisconnectionReason.Passive)
                     return
 
@@ -151,7 +173,6 @@ class TcpClient:
                     # 服务器关闭
                     self._finish(DisconnectionReason.Passive)
                     return
-
                 if self.message_callback:
                     self.message_callback(self, data)
 
@@ -189,20 +210,16 @@ class TcpClient:
             pass
 
         # 等待接收线程结束（如果是从接收线程自身调用，is_alive 会是 False）
-        if (
-            self.receive_thread
-            and self.receive_thread.is_alive()
-            and threading.current_thread() is not self.receive_thread
-        ):
+        if self.receive_thread and self.receive_thread.is_alive() and threading.current_thread() is not self.receive_thread:
             self.receive_thread.join()
 
         # 关闭 socket 与中断管道
-        if self.sock:
+        if self.ssl_sock:
             try:
-                self.sock.close()
+                self.ssl_sock.close()
             except OSError:
                 pass
-            self.sock = None
+            self.ssl_sock = None
 
         try:
             self._r_interrupt.close()

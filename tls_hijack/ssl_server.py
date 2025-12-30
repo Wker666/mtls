@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
 
-from tls_hjick.disconnect_reason import DisconnectionReason
+from tls_hijack.disconnect_reason import DisconnectionReason
 
 # 回调签名：
 # MessageCallback(SslServer, client_fd: int, data: bytes)

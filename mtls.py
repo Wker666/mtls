@@ -6,8 +6,8 @@ from pathlib import Path
 import threading
 from typing import List, Type
 
-from tls_hjick.ssl_proxy import SslProxy
-from tls_hjick.upstream_type import UpstreamType
+from tls_hijack.ssl_proxy import SslProxy
+from tls_hijack.upstream_type import UpstreamType
 
 
 def load_module_from_path(path: str, module_name: str | None = None):

@@ -8,8 +8,8 @@ import h11
 from colorama import Fore, Style, init as colorama_init
 from email.parser import Parser
 
-from tls_hjick.ssl_client import DisconnectionReason
-from tls_hjick.ssl_proxy_callback import SslProxyCallback
+from tls_hijack.ssl_client import DisconnectionReason
+from tls_hijack.ssl_proxy_callback import SslProxyCallback
 
 
 # ===================== 彩色日志工具 =====================
