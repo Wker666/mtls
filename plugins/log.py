@@ -13,10 +13,6 @@ from tls_hijack.upstream_type import UpstreamType
 class LoggingProxyCallback(SslProxyCallback):
 
     def __init__(self, client_fd: int, host: str, port: int):
-        """
-        proxy: 可选，把 SslProxy 实例传进来，这样可以在 callback 里主动发给 client。
-               如果你不想在这里发消息，可以不传。
-        """
         super().__init__(client_fd, host, port)
         self.total_bytes_sent = 0
         self.total_bytes_recv = 0
