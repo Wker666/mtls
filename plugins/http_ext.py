@@ -461,6 +461,8 @@ class ConnListApp(App):
 
 
 def start_tui(proxy: SslProxy, protocol: ProtocolType, upstream_type: UpstreamType, upstream_host: str, upstream_port: int, listen_port: int, unknown_args: list):
+    if protocol != ProtocolType.TCP:
+        raise ValueError("HTTP plugin only supports TCP protocol")
     ConnListApp().run()
 
 

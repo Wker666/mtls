@@ -873,7 +873,8 @@ class H11BuildProxyCallback(SslProxyCallback):
 callbacks = [H11BuildProxyCallback]
 
 def init_complete(proxy: SslProxy, protocol: ProtocolType, upstream_type: UpstreamType, upstream_host: str, upstream_port: int, listen_port: int, unknown_args: list):
-    pass
+    if protocol != ProtocolType.TCP:
+        raise ValueError("HTTP plugin only supports TCP protocol")
 
 init_cb = init_complete
 
