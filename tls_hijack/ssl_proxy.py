@@ -1,10 +1,18 @@
-# ssl_proxy.py
 from typing import Dict, Optional, Type
 import threading
 
-from .ssl_server import SslServer, DisconnectionReason
+from tls_hijack.disconnect_reason import DisconnectionReason
+from tls_hijack.protocol_type import ProtocolType
+from tls_hijack.udp_client import UdpClient
+
+from .base_server import BaseServer
+from .base_client import BaseClient
+
+from .ssl_server import SslServer
 from .ssl_client import SslClient
 from .tcp_client import TcpClient
+from .dtls_server import DtlsServer
+from .dtls_client import DtlsClient
 from .ssl_proxy_callback import SslProxyCallback
 from .upstream_type import UpstreamType
 
@@ -21,7 +29,8 @@ class SslProxy:
         callback_cls: Type[SslProxyCallback] = SslProxyCallback,
         upstream_type: UpstreamType = UpstreamType.SSL,
         upstream_host: Optional[str] = None,
-        upstream_port: Optional[int] = None
+        upstream_port: Optional[int] = None,
+        protocol: ProtocolType = ProtocolType.TCP
     ):
         self.listen_port = listen_port
         self.cert_file = cert_file
@@ -30,10 +39,23 @@ class SslProxy:
         self.pem_tmp_dir = pem_tmp_dir
 
         self.timeout = timeout
-        self.server = SslServer(listen_port, cert_file, key_file, pem_tmp_dir, self.timeout)
+        self.protocol = protocol
 
-        # client_fd -> (SslClient | TcpClient)
-        self.client_map: Dict[int, object] = {}
+        if self.protocol == ProtocolType.TCP:
+            self.ServerClass = SslServer
+            self.ClientClass = SslClient
+        elif self.protocol == ProtocolType.UDP:
+            self.ServerClass = DtlsServer
+            self.ClientClass = DtlsClient
+        else:
+            raise ValueError("Protocol must be 'tcp' or 'udp'")
+
+        self.server: BaseServer = self.ServerClass(
+            listen_port, cert_file, key_file, pem_tmp_dir, self.timeout
+        )
+
+        # client_fd -> (BaseClient)
+        self.client_map: Dict[int, BaseClient] = {}
         # client_fd -> SslProxyCallback
         self.proxy_cb_map: Dict[int, SslProxyCallback] = {}
 
@@ -94,7 +116,7 @@ class SslProxy:
     # ---------------------- 回调函数 ----------------------
 
     # 有新客户端接入
-    def _connection_callback(self, host: str, port: int, server: SslServer, client_fd: int):
+    def _connection_callback(self, host: str, port: int, server: BaseServer, client_fd: int):
         """
         当有新的本地客户端连接到代理时，
         为其创建一个到目标服务器的上游连接（SslClient 或 TcpClient）。
@@ -120,7 +142,7 @@ class SslProxy:
 
         # 根据 upstream_type 决定使用 SslClient 或 TcpClient
         if self.upstream_type == UpstreamType.SSL:
-            TargetClientCls = SslClient
+            TargetClientCls = self.ClientClass
             client_kwargs = dict(
                 verify_cert=self.verify_target_cert,
                 timeout=self.timeout,
@@ -131,6 +153,11 @@ class SslProxy:
                 verify_cert=self.verify_target_cert,
                 timeout=self.timeout,
             )
+        elif self.upstream_type == UpstreamType.UDP:
+            TargetClientCls = UdpClient
+            client_kwargs = dict(
+                timeout=self.timeout,
+            )
         else:
             # 理论上不会进来，防御性处理
             server.disconnectClient(client_fd)
@@ -139,7 +166,7 @@ class SslProxy:
             return
 
         # 创建上游客户端实例
-        target_client = TargetClientCls(
+        target_client: BaseClient = TargetClientCls(
             target_host,
             target_port,
             on_target_message,
@@ -173,7 +200,7 @@ class SslProxy:
                 self.proxy_cb_map.pop(client_fd, None)
 
     # 客户端 -> 代理 -> 目标服务器
-    def _handle_client_message(self, server: SslServer, client_fd: int, data: bytes):
+    def _handle_client_message(self, server: BaseServer, client_fd: int, data: bytes):
         data = bytearray(data)
 
         # 1. 获取并调用 proxy callback（仅 cb 锁）
@@ -201,7 +228,7 @@ class SslProxy:
             client.sendMessage(data)
 
     # 目标服务器 -> 代理 -> 客户端
-    def _handle_target_message(self, client, data: bytes):
+    def _handle_target_message(self, client: BaseClient, data: bytes):
         data = bytearray(data)
 
         # 1. 从 client_map 中找到对应的 client_fd（只在 client 锁里找）
@@ -235,7 +262,7 @@ class SslProxy:
         self.server.sendMessageToClient(client_fd, data)
 
     # 本地客户端断开
-    def _disconnection_callback(self, server: SslServer, client_fd: int, reason: DisconnectionReason):
+    def _disconnection_callback(self, server: BaseServer, client_fd: int, reason: DisconnectionReason):
         """
         本地客户端断开 -> 清理对应的上游连接。
         不再调用 server.disconnectClient，因为 server 已经在内部关闭了 fd。
@@ -262,13 +289,12 @@ class SslProxy:
                 finally:
                     # 显式删除引用，加速资源回收（逻辑与原来相同）
                     del proxy_cb
-            # print(f"Client {client_fd} disconnected from proxy (reason={reason}).")
 
         t = threading.Thread(target=task, daemon=True)
         t.start()
 
     # 目标服务器断开
-    def _target_disconnection_callback(self, client, reason: DisconnectionReason):
+    def _target_disconnection_callback(self, client: BaseClient, reason: DisconnectionReason):
         """
         目标服务器断开 -> 无论 Active / Passive，都断开对应的本地客户端。
         """

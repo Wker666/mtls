@@ -1,11 +1,15 @@
+#!/usr/bin/env python3
+
 import argparse
 import importlib.util
+import os
 import signal
 import sys
 from pathlib import Path
 import threading
 from typing import List, Type
 
+from tls_hijack.protocol_type import ProtocolType
 from tls_hijack.ssl_proxy import SslProxy
 from tls_hijack.upstream_type import UpstreamType
 
@@ -16,7 +20,7 @@ def load_module_from_path(path: str, module_name: str | None = None):
         raise FileNotFoundError(path_obj)
 
     if module_name is None:
-        module_name = path_obj.stem  # logging_callback.py -> logging_callback
+        module_name = path_obj.stem 
 
     spec = importlib.util.spec_from_file_location(module_name, path_obj)
     if spec is None or spec.loader is None:
@@ -65,10 +69,19 @@ def parse_args() -> argparse.Namespace:
         "--script",
         dest="callback_script_path",
         required=True,
-        help="Path to the callback script, e.g. ./logging_callback.py",
+        help="Path to the callback script, e.g. plugins/log.py",
     )
 
     parser.add_argument(
+        "-u", 
+        "--udp",
+        action="store_true",
+        default=False,
+        help="Use UDP (DTLS) protocol instead of TCP (SSL/TLS).",
+    )
+
+    parser.add_argument(
+        "-p",
         "--listen-port",
         type=int,
         default=443,
@@ -112,7 +125,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
-    return parser.parse_args()
+    return parser.parse_known_args()
 
 def main():
     def handle_sigint(signum, frame):
@@ -123,9 +136,7 @@ def main():
         print('Goodbye!')
         sys.exit(0)
 
-    # signal.signal(signal.SIGINT, handle_sigint)
-
-    args = parse_args()
+    args,unknown_args = parse_args()
     callback_classes, init_cb = load_callback_classes(args.callback_script_path)
     CallbackCls = callback_classes[0]
 
@@ -137,20 +148,30 @@ def main():
         tmp_pem_dir.mkdir(parents=True)
 
     upstream_type = UpstreamType.SSL
+    protocol = ProtocolType.UDP if args.udp else ProtocolType.TCP
+    if protocol == ProtocolType.UDP:
+        if os.geteuid() != 0:
+            raise SystemExit("UDP proxy must run as root")
 
     upstream_host = None
     upstream_port = None
     if args.upstream:
         try:
-            upstream_type = UpstreamType.TCP
+            if protocol == ProtocolType.UDP:
+                upstream_type = UpstreamType.UDP
+            else:
+                upstream_type = UpstreamType.TCP
             host, port_str = args.upstream.rsplit(":", 1)
             upstream_host = host
             upstream_port = int(port_str)
         except ValueError:
             raise SystemExit(f"Invalid --upstream value: {args.upstream!r}, expected host:port")
+    
+    listen_port = args.listen_port
+
 
     proxy = SslProxy(
-        listen_port = args.listen_port,
+        listen_port = listen_port,
         cert_file=args.cert_file,
         key_file=args.key_file,
         callback_cls=CallbackCls,
@@ -159,12 +180,14 @@ def main():
         upstream_type=upstream_type,
         upstream_host=upstream_host,
         upstream_port=upstream_port,
+        protocol=protocol
     )
 
     if init_cb is not None:
         threading.Thread(target=proxy.start, daemon=True).start()
-        init_cb()
+        init_cb(proxy,protocol,upstream_type,upstream_host,upstream_port,listen_port,unknown_args)
     else:
+        signal.signal(signal.SIGINT, handle_sigint)
         ok = proxy.start()
         if not ok:
             print("Failed to start proxy")

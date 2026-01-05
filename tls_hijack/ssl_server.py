@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
 
+from tls_hijack.base_server import BaseServer
 from tls_hijack.disconnect_reason import DisconnectionReason
 
 # 回调签名：
@@ -23,7 +24,7 @@ ConnectionCallback = Callable[["SslServer", str, int, int], None]
 DisconnectionCallback = Callable[["SslServer", int, DisconnectionReason], None]
 
 
-class SslServer:
+class SslServer(BaseServer):
     """
     支持 MITM 的 TLS 服务器：
     - 使用一个自建根 CA（ca_cert_file, ca_key_file）
@@ -32,6 +33,7 @@ class SslServer:
     """
 
     def __init__(self, port: int, ca_cert_file: str, ca_key_file: str, tmp_pem_dir: str = "./tmp", timeout: float = 5):
+        super().__init__(port, timeout)
         self.port = port
         self.ca_cert_file = ca_cert_file
         self.ca_key_file = ca_key_file

@@ -8,9 +8,13 @@ import h11
 from colorama import Fore, Style, init as colorama_init
 from email.parser import Parser
 
-from tls_hijack.ssl_client import DisconnectionReason, SslClient
+from tls_hijack.base_client import BaseClient
+from tls_hijack.base_server import BaseServer
+from tls_hijack.disconnect_reason import DisconnectionReason
+from tls_hijack.protocol_type import ProtocolType
+from tls_hijack.ssl_proxy import SslProxy
 from tls_hijack.ssl_proxy_callback import SslProxyCallback
-from tls_hijack.ssl_server import SslServer
+from tls_hijack.upstream_type import UpstreamType
 
 
 # ===================== 彩色日志工具 =====================
@@ -652,7 +656,7 @@ class H11BuildProxyCallback(SslProxyCallback):
 
     # ---------------- SslProxyCallback 接口实现 ----------------
 
-    def on_connect(self, server: SslServer, target_client: SslClient):
+    def on_connect(self, server: BaseServer, target_client: BaseClient):
         self.server = server
         self.target_client = target_client
         logger.debug(
@@ -791,7 +795,7 @@ class H11BuildProxyCallback(SslProxyCallback):
 
 callbacks = [H11BuildProxyCallback]
 
-def init_complete():
+def init_complete(proxy: SslProxy, protocol: ProtocolType, upstream_type: UpstreamType, upstream_host: str, upstream_port: int, listen_port: int, unknown_args: list):
     pass
 
 init_cb = init_complete
