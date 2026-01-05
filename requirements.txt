@@ -6,3 +6,4 @@ textual==6.11.0
 scapy==2.7.0
 pyshark==0.6
 pyOpenSSL==25.3.0
+brotli==1.2.0
