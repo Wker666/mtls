@@ -6,6 +6,10 @@ from typing import Optional, Dict, Any
 from http import HttpFlowHandler, SimpleRequest, SimpleResponse, setup_logging
 import logging
 
+from tls_hijack.protocol_type import ProtocolType
+from tls_hijack.ssl_proxy import SslProxy
+from tls_hijack.upstream_type import UpstreamType
+
 
 # ======================= 事件与存储结构 =======================
 
@@ -456,7 +460,7 @@ class ConnListApp(App):
         self.exit()
 
 
-def start_tui():
+def start_tui(proxy: SslProxy, protocol: ProtocolType, upstream_type: UpstreamType, upstream_host: str, upstream_port: int, listen_port: int, unknown_args: list):
     ConnListApp().run()
 
 

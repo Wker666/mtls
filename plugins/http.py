@@ -3,6 +3,9 @@ import sys
 from typing import Dict, List, Tuple
 from threading import Lock
 from itertools import count
+import gzip
+import io
+import brotli
 
 import h11
 from colorama import Fore, Style, init as colorama_init
@@ -576,6 +579,78 @@ class H11BuildProxyCallback(SslProxyCallback):
             return resp, total_len, False
 
     # ---------------- Content-Length / chunked 修正 ----------------
+# ---------------- 核心：多格式解压/重压缩 ----------------
+
+    @staticmethod
+    def _unwrap_response_body(resp: SimpleResponse) -> str | None:
+        ce_key = "content-encoding"
+        encoding = resp.headers.get(ce_key, "").lower()
+
+        if not encoding or not resp.body:
+            return None
+
+        # ---------------- 处理 Gzip ----------------
+        if "gzip" in encoding:
+            try:
+                # 兼容多段 gzip
+                with gzip.GzipFile(fileobj=io.BytesIO(resp.body), mode='rb') as f:
+                    decoded = f.read()
+                resp.body = decoded
+                resp.remove_header(ce_key)
+                return "gzip"
+            except Exception as e:
+                logger.error(f"[H11-BUILD] Gzip decompress error: {e}")
+                return None
+
+        # ---------------- 处理 Brotli (br) ----------------
+        elif "br" in encoding:
+            if brotli is None:
+                logger.warning("[H11-BUILD] Server returned 'br' but brotli module is missing.")
+                return None
+            
+            try:
+                decoded = brotli.decompress(resp.body)
+                resp.body = decoded
+                resp.remove_header(ce_key)
+                return "br"
+            except Exception as e:
+                logger.error(f"[H11-BUILD] Brotli decompress error: {e}")
+                return None
+        
+        # ---------------- 处理 Deflate (可选) ----------------
+        
+        return None
+
+    @staticmethod
+    def _wrap_response_body(resp: SimpleResponse, original_encoding: str | None) -> None:
+        if not original_encoding or not resp.body:
+            return
+
+        ce_key = "content-encoding"
+
+        try:
+            if original_encoding == "gzip":
+                buf = io.BytesIO()
+                # compresslevel=6 默认平衡
+                with gzip.GzipFile(fileobj=buf, mode='wb', compresslevel=6) as f:
+                    f.write(resp.body)
+                resp.body = buf.getvalue()
+                resp.set_header(ce_key, "gzip")
+
+            # ---------------- 重压缩 Brotli ----------------
+            elif original_encoding == "br":
+                if brotli:
+                    # quality=11 是 brotli 的默认最高压缩比，但为了速度可以用 4-6
+                    resp.body = brotli.compress(resp.body, quality=4)
+                    resp.set_header(ce_key, "br")
+                else:
+                    # 极端情况：刚才解压了但现在库没了？或者逻辑错误
+                    pass
+
+        except Exception as e:
+            logger.error(f"[H11-BUILD] Re-compression ({original_encoding}) failed: {e}")
+            # 如果重压缩失败，千万别加 Content-Encoding 头
+            # 这样客户端会收到明文，虽然浪费流量但能正常显示，不会报错
 
     @staticmethod
     def _fix_request_headers_after_flow(req: SimpleRequest, keep_chunked: bool) -> None:
@@ -763,9 +838,11 @@ class H11BuildProxyCallback(SslProxyCallback):
 
             self._save_response_to_global(request_id, resp)
 
+            original_encoding = self._unwrap_response_body(resp)
             before_body = resp.body
             resp = HTTP_FLOW_HANDLER.response(request_id, resp)
             after_body = resp.body
+            self._wrap_response_body(resp, original_encoding)
 
             # 同上，统一改为 Content-Length 返回给客户端
             keep_chunked = False
