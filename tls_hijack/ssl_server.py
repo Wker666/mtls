@@ -306,9 +306,9 @@ class SslServer(BaseServer):
 
             if self.connection_callback:
                 if ssl_sock.sni_hostname is None:
-                    self.connection_callback(original_ip, original_port, self, client_fd)
+                    self.connection_callback(self, original_ip, original_port,  client_fd)
                 else:
-                    self.connection_callback(ssl_sock.sni_hostname, original_port, self, client_fd)
+                    self.connection_callback(self, ssl_sock.sni_hostname, original_port, client_fd)
 
             # 启动客户端处理线程
             t = threading.Thread(

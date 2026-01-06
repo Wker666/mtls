@@ -20,7 +20,7 @@ class LoggingProxyCallback(SslProxyCallback):
     def on_connect(self, server: BaseServer, target_client: BaseClient):
         self.server = BoundServer(server, self.client_fd)
         self.target_client = target_client
-        print(f"[CB] client_fd={self.client_fd} connected from {self.host}:{self.port}")
+        print(f"[CB] client_fd={self.client_fd} connected to {self.host}:{self.port}")
 
     def on_send_message(self, data: bytearray) -> bytearray:
         """

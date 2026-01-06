@@ -125,6 +125,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    parser.add_argument(
+        "--raw-protocol",
+        action="store_true",
+        default=False,
+        help=(
+            "Use raw protocol instead of SSL/TLS. "
+            "This option is only available for TCP protocol."
+        ),
+    )
+
     return parser.parse_known_args()
 
 def main():
@@ -168,6 +178,7 @@ def main():
             raise SystemExit(f"Invalid --upstream value: {args.upstream!r}, expected host:port")
     
     listen_port = args.listen_port
+    raw_protocol = args.raw_protocol
 
 
     proxy = SslProxy(
@@ -180,7 +191,8 @@ def main():
         upstream_type=upstream_type,
         upstream_host=upstream_host,
         upstream_port=upstream_port,
-        protocol=protocol
+        protocol=protocol,
+        raw_protocol=raw_protocol,
     )
 
     if init_cb is not None:

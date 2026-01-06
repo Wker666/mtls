@@ -218,8 +218,7 @@ class DtlsServer(BaseServer):
                     self.connection_closed[client_fd] = False
 
                 if self.connection_callback:
-                    # 匹配 SslServer 回调顺序: (host, port, self, fd)
-                    self.connection_callback(target_host, target_port, self, client_fd)
+                    self.connection_callback(self, target_host, target_port, client_fd)
 
                 t = threading.Thread(target=self._handle_client, args=(client_fd, session_key), daemon=True)
                 with self._lock: self.client_threads.append(t)

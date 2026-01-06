@@ -3,7 +3,9 @@ import threading
 
 from tls_hijack.disconnect_reason import DisconnectionReason
 from tls_hijack.protocol_type import ProtocolType
+from tls_hijack.tcp_server import TcpServer
 from tls_hijack.udp_client import UdpClient
+from tls_hijack.udp_server import UdpServer
 
 from .base_server import BaseServer
 from .base_client import BaseClient
@@ -30,7 +32,8 @@ class SslProxy:
         upstream_type: UpstreamType = UpstreamType.SSL,
         upstream_host: Optional[str] = None,
         upstream_port: Optional[int] = None,
-        protocol: ProtocolType = ProtocolType.TCP
+        protocol: ProtocolType = ProtocolType.TCP,
+        raw_protocol: bool = False
     ):
         self.listen_port = listen_port
         self.cert_file = cert_file
@@ -40,13 +43,22 @@ class SslProxy:
 
         self.timeout = timeout
         self.protocol = protocol
+        self.raw_protocol = raw_protocol
 
         if self.protocol == ProtocolType.TCP:
-            self.ServerClass = SslServer
-            self.ClientClass = SslClient
+            if self.raw_protocol:
+                self.ServerClass = TcpServer
+                self.ClientClass = TcpClient
+            else:
+                self.ServerClass = SslServer
+                self.ClientClass = SslClient
         elif self.protocol == ProtocolType.UDP:
-            self.ServerClass = DtlsServer
-            self.ClientClass = DtlsClient
+            if self.raw_protocol:
+                self.ServerClass = UdpServer
+                self.ClientClass = UdpClient
+            else:
+                self.ServerClass = DtlsServer
+                self.ClientClass = DtlsClient
         else:
             raise ValueError("Protocol must be 'tcp' or 'udp'")
 
@@ -116,7 +128,7 @@ class SslProxy:
     # ---------------------- 回调函数 ----------------------
 
     # 有新客户端接入
-    def _connection_callback(self, host: str, port: int, server: BaseServer, client_fd: int):
+    def _connection_callback(self,  server: BaseServer, host: str, port: int, client_fd: int):
         """
         当有新的本地客户端连接到代理时，
         为其创建一个到目标服务器的上游连接（SslClient 或 TcpClient）。

@@ -1,8 +1,17 @@
-# TLS/DTLS 中间人劫持
+# TLS/DTLS/TCP/UDP 中间人劫持
 
-支持TCP/UDP流量的TLS/DTLS中间人攻击，在网关上游配置路由实现tls/dtls流量解密，无需客户端配置（当然证书还是要安装或者patch的），将TLS/DTLS流量中的加密内容提取实现修改和查看。
 
-通过插件的方式实现功能扩展，目前提供的插件有：
+| 协议 | 支持情况 | 特殊说明 |
+|------|---------------------------|---------|
+| **TCP** | ✅ | ... |
+| **UDP** | ✅ | ... |
+| **TLS** | ✅ | 需要patch或者信任的证书 |
+| **DTLS** | ✅ | 需要patch或者信任的证书 |
+
+### 插件
+
+mtls通过插件的方式实现功能扩展，目前提供的插件有：
+
 - 打印日志
 ![log](pic/2.png)
 - 解析协议
@@ -63,8 +72,8 @@ pip install -r requirements.txt
 参数说明：
 
 ```bash
-usage: mtls.py [-h] -s CALLBACK_SCRIPT_PATH [-u] [--listen-port LISTEN_PORT] [--cert-file CERT_FILE] [--key-file KEY_FILE] [--tmp-pem-dir TMP_PEM_DIR]
-               [--timeout TIMEOUT] [--upstream UPSTREAM]
+usage: mtls.py [-h] -s CALLBACK_SCRIPT_PATH [-u] [-p LISTEN_PORT] [--cert-file CERT_FILE] [--key-file KEY_FILE] [--tmp-pem-dir TMP_PEM_DIR] [--timeout TIMEOUT]
+               [--upstream UPSTREAM] [--raw-protocol]
 
 SSL proxy with pluggable callback script
 
@@ -73,7 +82,7 @@ options:
   -s, --script CALLBACK_SCRIPT_PATH
                         Path to the callback script, e.g. plugins/log.py
   -u, --udp             Use UDP (DTLS) protocol instead of TCP (SSL/TLS).
-  --listen-port LISTEN_PORT
+  -p, --listen-port LISTEN_PORT
                         Listen port (default: 443)
   --cert-file CERT_FILE
                         Path to server certificate file (default: certs/ca-cert.pem)
@@ -82,6 +91,7 @@ options:
                         Directory to store generated leaf certificate/key PEM files (default: ./tmp). WARNING: this directory may be cleared on startup.
   --timeout TIMEOUT     Timeout for SSL connections Set to -1 to disable timeout.
   --upstream UPSTREAM   Optional fixed upstream address in the form host:port. If omitted, the proxy will use the original target host and port.
+  --raw-protocol        Use raw protocol instead of SSL/TLS. This option is only available for TCP protocol.
 ```
 
 ## 使用示例
@@ -101,6 +111,8 @@ options:
 
 # sudo su
 ./mtls.py -s plugins/shark.py -u -p 6666 --upstream 127.0.0.1:5555
+
+./mtls.py -s plugins/shark.py -u -p 6666 --upstream 127.0.0.1:5555 --raw-protocol
 ```
 
 > -u 参数需要使用root权限启动。
