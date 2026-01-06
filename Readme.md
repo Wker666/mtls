@@ -12,6 +12,8 @@
 ![log](pic/6.png)
 - 查看http请求
 ![http](pic/1.png)
+![http](pic/7.png)
+![http](pic/8.png)
 
 # 环境配置
 
