@@ -66,7 +66,7 @@ class SslProxy:
         self._proxy_cb_cls: Type[SslProxyCallback] = callback_cls
 
         self.upstream_type = upstream_type
-        if upstream_type == UpstreamType.TCP:
+        if upstream_type == UpstreamType.TCP or upstream_type == UpstreamType.UDP:
             assert upstream_host is not None and upstream_port is not None, \
                 "TCP 上游类型需要提供主机名和端口"
         self.upstream_host = upstream_host
