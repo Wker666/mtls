@@ -12,7 +12,7 @@ from colorama import Fore, Style, init as colorama_init
 from email.parser import Parser
 
 from tls_hijack.base_client import BaseClient
-from tls_hijack.base_server import BaseServer
+from tls_hijack.base_server import BaseServer, BoundServer
 from tls_hijack.disconnect_reason import DisconnectionReason
 from tls_hijack.protocol_type import ProtocolType
 from tls_hijack.ssl_proxy import SslProxy
@@ -384,10 +384,8 @@ class H11BuildProxyCallback(SslProxyCallback):
     - 正确处理 Transfer-Encoding: chunked 与 Content-Length 关系
     """
 
-    def __init__(self, client_fd: int, host: str, port: int, proxy=None):
+    def __init__(self, client_fd: int, host: str, port: int):
         super().__init__(client_fd, host, port)
-        self.proxy = proxy
-
         self._req_buffer = bytearray()
         self._resp_buffer = bytearray()
 
@@ -732,7 +730,7 @@ class H11BuildProxyCallback(SslProxyCallback):
     # ---------------- SslProxyCallback 接口实现 ----------------
 
     def on_connect(self, server: BaseServer, target_client: BaseClient):
-        self.server = server
+        self.server = BoundServer(server, self.client_fd)
         self.target_client = target_client
         logger.debug(
             "[H11-BUILD] client_fd=%s connected %s:%s",

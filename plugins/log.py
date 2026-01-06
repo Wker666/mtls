@@ -6,7 +6,7 @@ from tls_hijack.disconnect_reason import DisconnectionReason
 from tls_hijack.protocol_type import ProtocolType
 from tls_hijack.ssl_proxy import SslProxy
 from tls_hijack.ssl_proxy_callback import SslProxyCallback
-from tls_hijack.base_server import BaseServer
+from tls_hijack.base_server import BaseServer, BoundServer
 from tls_hijack.upstream_type import UpstreamType
 
 
@@ -18,7 +18,7 @@ class LoggingProxyCallback(SslProxyCallback):
         self.total_bytes_recv = 0
 
     def on_connect(self, server: BaseServer, target_client: BaseClient):
-        self.server = server
+        self.server = BoundServer(server, self.client_fd)
         self.target_client = target_client
         print(f"[CB] client_fd={self.client_fd} connected from {self.host}:{self.port}")
 

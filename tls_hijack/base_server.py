@@ -35,3 +35,35 @@ class BaseServer(ABC):
     @abstractmethod
     def setDisconnectionCallback(self, callback: Callable):
         pass
+
+class BoundServer:
+    '''
+    包装
+    '''
+    def __init__(self, server: BaseServer, client_fd: int):
+        self._server = server
+        self._fd = client_fd
+
+    def sendMessageToClient(self, data: bytes):
+        return self._server.sendMessageToClient(self._fd, data)
+
+    def disconnectClient(self):
+        return self._server.disconnectClient(self._fd)
+
+    def start(self) -> bool:
+        return self._server.start()
+
+    def stop(self):
+        self._server.stop()
+
+    def setConnectionCallback(self, callback: Callable):
+        self._server.setConnectionCallback(callback)
+
+    def setMessageCallback(self, callback: Callable):
+        self._server.setMessageCallback(callback)
+
+    def setDisconnectionCallback(self, callback: Callable):
+        self._server.setDisconnectionCallback(callback)
+
+    def __getattr__(self, name):
+        return getattr(self._server, name)
