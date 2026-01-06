@@ -894,7 +894,10 @@ try:
             "[H11-BUILD] h11_build_proxy_ext found but no get_http_flow_handler() defined"
         )
     if hasattr(plugins.http_ext, "init_complete"):
-        init_cb = plugins.http_ext.init_complete
+        def init_call(*args, **kwargs):
+            init_complete(*args, **kwargs)
+            plugins.http_ext.init_complete(*args, **kwargs)
+        init_cb = init_call
 except ImportError:
     logger.debug("[H11-BUILD] no h11_build_proxy_ext module, using default HttpFlowHandler")
 except Exception:
