@@ -46,6 +46,8 @@ sudo ./gateway_cnf.sh
 
 ```
 
+> `gateway_cnf.sh` 中默认配置的lan口网卡为eth1, 根据实际情况修改。
+
 ## 安装依赖
 
 ```bash
