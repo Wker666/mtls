@@ -1,8 +1,11 @@
 import binascii
 import io
+import logging
 import time
 import json
-import logging
+import argparse
+import importlib.util
+import os
 from dataclasses import dataclass
 from queue import Queue, Empty
 from typing import Callable, Optional, Dict, Any
@@ -28,6 +31,9 @@ from tls_hijack.protocol_type import ProtocolType
 from tls_hijack.ssl_proxy import SslProxy
 from tls_hijack.upstream_type import UpstreamType
 from http import HttpFlowHandler, SimpleRequest, SimpleResponse
+
+
+logger = logging.getLogger(__name__)
 
 # ======================= 1. 模型与状态管理 =======================
 
@@ -460,6 +466,8 @@ class ConnListApp(App):
 
 # ======================= 5. 代理 Handler =======================
 
+_GLOBAL_USER_PLUGIN = None
+
 class MyHttpFlowHandler(HttpFlowHandler):
     def request(self, host: str, port: int, request_id: int, req: SimpleRequest) -> SimpleRequest:
         now = time.time()
@@ -477,7 +485,18 @@ class MyHttpFlowHandler(HttpFlowHandler):
             method=req.method, url=req.target, host=host, port=port
         ))
         
-        req.headers["Connection"] = "close"
+        req.headers["connection"] = "close"
+
+
+        global _GLOBAL_USER_PLUGIN
+        if _GLOBAL_USER_PLUGIN:
+            try:
+                modified_req = _GLOBAL_USER_PLUGIN.request(host, port, request_id, req)
+                if modified_req:
+                    req = modified_req
+            except Exception as e:
+                logging.error(f"User Plugin Request Error: {e}")
+
         return req
 
     def response(self, request_id: int, resp: SimpleResponse) -> SimpleResponse:
@@ -503,6 +522,16 @@ class MyHttpFlowHandler(HttpFlowHandler):
             status=resp.status_code, size=len(body), 
             content_type=content_type
         ))
+
+        global _GLOBAL_USER_PLUGIN
+        if _GLOBAL_USER_PLUGIN:
+            try:
+                modified_resp = _GLOBAL_USER_PLUGIN.response(request_id, resp)
+                if modified_resp:
+                    resp = modified_resp
+            except Exception as e:
+                logging.error(f"User Plugin Response Error: {e}")
+
         return resp
 
 # ======================= 启动函数 =======================
@@ -510,7 +539,31 @@ class MyHttpFlowHandler(HttpFlowHandler):
 def get_http_flow_handler() -> HttpFlowHandler:
     return MyHttpFlowHandler()
 
-def start_tui(*args, **kwargs):
+def start_tui(proxy: SslProxy, protocol: ProtocolType, upstream_type: UpstreamType, upstream_host: str, upstream_port: int, listen_port: int, unknown_args: list):
+    global _GLOBAL_USER_PLUGIN
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--plugin", help="Path to user python script")
+    args, _ = parser.parse_known_args(unknown_args)
+
+    if args.plugin:
+        script_path = os.path.abspath(args.plugin)
+        if os.path.exists(script_path):
+            try:
+                module_name = "user_plugin_module"
+                spec = importlib.util.spec_from_file_location(module_name, script_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                if hasattr(module, "HttpIntercept"):
+                    plugin_class = getattr(module, "HttpIntercept")
+                    _GLOBAL_USER_PLUGIN = plugin_class()
+                    logger.info(f"Successfully initialized plugin via 'HttpIntercept'")
+                else:
+                    logger.error(f"Plugin script found but 'HttpIntercept' variable is missing in {script_path}")
+            except Exception as e:
+                logger.error(f"Failed to load plugin: {e}")
+
+        
     ConnListApp().run()
 
 init_complete = start_tui

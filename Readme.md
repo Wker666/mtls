@@ -355,9 +355,142 @@ init_cb = start
 callbacks = [TemplatePlugin]
 ```
 
-## Http 插件
 
-....
+# HTTP 插件与子插件系统 (Sub-Plugin System)
+
+`http.py` 不仅是一个http流量查看插件，它还是一个高度抽象的 **HTTP 篡改引擎**。通过使用 `--plugin` 参数，你可以加载专属的 Python 脚本，在不关心底层 TCP 粘包和 SSL 解密的情况下，直接对 HTTP 请求和响应进行毫秒级的精确篡改。
+
+## 1. 核心架构
+
+`http.py` 引擎负责将原始字节流解析为结构化的 `SimpleRequest` 和 `SimpleResponse` 对象，并交给子插件处理。
+
+### 1.1 请求对象 (SimpleRequest)
+```python
+class SimpleRequest:
+    def __init__(self, method: str, target: str, http_version: str, headers: Dict[str, str], body: bytes):
+        self.method = method        # GET, POST, etc.
+        self.target = target        # /index.html
+        self.http_version = http_version
+        # headers: 内部自动转换为小写 key -> value，方便匹配
+        self.headers = {k.lower(): v for k, v in headers.items()}
+        self.body = body
+
+    def set_header(self, name: str, value: str):
+        self.headers[name.lower()] = value
+
+    def remove_header(self, name: str):
+        self.headers.pop(name.lower(), None)
+```
+
+### 1.2 响应对象 (SimpleResponse)
+```python
+class SimpleResponse:
+    def __init__(self, status_code: int, reason: str, http_version: str, headers: Dict[str, str], body: bytes):
+        self.status_code = status_code  # 200, 404, etc.
+        self.reason = reason            # OK, Not Found
+        self.http_version = http_version
+        self.headers = {k.lower(): v for k, v in headers.items()}
+        self.body = body
+
+    def set_header(self, name: str, value: str):
+        self.headers[name.lower()] = value
+
+    def remove_header(self, name: str):
+        self.headers.pop(name.lower(), None)
+```
+
+---
+
+## 2. 插件开发规范
+
+要编写一个子插件，你需要继承 `HttpFlowHandler` 类，并导出 `HttpIntercept` 变量。
+
+### 2.1 完整脚本示例：`hacker_script.py`
+这个脚本演示了如何针对特定域名注入 JavaScript 脚本：
+
+```python
+from plugins.http import HttpFlowHandler, SimpleRequest, SimpleResponse
+
+class MyHacker(HttpFlowHandler):
+    def __init__(self):
+        super().__init__()
+        self.host = ""
+
+    def request(self, host: str, port: int, request_id: int, req: SimpleRequest):
+        """
+        在请求阶段记录 host，或者修改请求头
+        """
+        self.host = host
+        # 示例：强制要求服务器返回明文（禁用压缩）
+        req.set_header("Accept-Encoding", "identity")
+        return req
+
+    def response(self, request_id: int, resp: SimpleResponse):
+        """
+        在响应阶段篡改 Body 内容
+        """
+        body = resp.body
+        
+        # 逻辑：如果是百度域名，且返回内容是 HTML
+        if "baidu.com" in self.host:
+            if b'</body>' in body and b'</html>' in body:
+                print(f"[+] Target detected: {self.host}, injecting payload...")
+                
+                # 注入一段 Alert 脚本
+                payload = b"<script>alert('This is an alert from mtls !');</script>"
+                resp.body = payload + body
+                
+                # 注意：http.py 引擎会自动根据新的 resp.body 长度更新 Content-Length
+        
+        return resp
+
+# 核心导出：必须将你的类赋值给 HttpIntercept
+HttpIntercept = MyHacker 
+```
+
+---
+
+## 3. 运行与调试
+
+使用 `-s` 参数指定 `http.py` 引擎，使用 `--plugin` 指定你的业务脚本：
+
+```bash
+# 启动代理并加载篡改脚本
+./mtls.py -s plugins/http.py --plugin hacker_script.py
+```
+
+### 关键技术特性
+1.  **Header 规范化**：所有传入插件的 Header Key 均已转为小写。在调用 `set_header` 或访问 `headers` 字典时，无需担心大小写敏感问题。
+2.  **二进制安全**：`body` 字段始终为 `bytes` 类型。在进行内容查找或替换时，请务必使用 `b'string'` 语法。
+3.  **自动长度修正**：当你修改了 `resp.body` 后，`http.py` 引擎在将数据发回客户端前，会自动计算 `len(body)` 并重写 `Content-Length` 响应头，防止浏览器因长度不符而报错。
+4.  **上下文追踪**：通过 `request_id`，你可以在 `request` 和 `response` 之间传递状态信息（例如在 `request` 时存入字典，在 `response` 时读取）。
+
+---
+
+## 4. 常见场景代码片段
+
+### 修改 JSON 返回值
+```python
+import json
+
+def response(self, request_id, resp):
+    if b"application/json" in resp.headers.get("content-type", b""):
+        data = json.loads(resp.body)
+        data["is_admin"] = True
+        resp.body = json.dumps(data).encode()
+    return resp
+```
+
+### 绕过安全策略 (CSP/HSTS)
+```python
+def response(self, request_id, resp):
+    resp.remove_header("content-security-policy")
+    resp.remove_header("strict-transport-security")
+    return resp
+```
+
+---
+
 
 ## 测试示例
 
