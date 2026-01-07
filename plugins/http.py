@@ -11,6 +11,8 @@ import h11
 from colorama import Fore, Style, init as colorama_init
 from email.parser import Parser
 
+import zstandard as zstd
+import zlib
 from tls_hijack.base_client import BaseClient
 from tls_hijack.base_server import BaseServer, BoundServer
 from tls_hijack.disconnect_reason import DisconnectionReason
@@ -576,11 +578,10 @@ class H11BuildProxyCallback(SslProxyCallback):
             resp = parse_raw_http_response(full_raw)
             return resp, total_len, False
 
-    # ---------------- Content-Length / chunked 修正 ----------------
-# ---------------- 核心：多格式解压/重压缩 ----------------
+    # ---------------- 核心：多格式解压/重压缩 ----------------
 
     @staticmethod
-    def _unwrap_response_body(resp: SimpleResponse) -> str | None:
+    def _unwrap_response_body(resp: "SimpleResponse") -> str | None:
         ce_key = "content-encoding"
         encoding = resp.headers.get(ce_key, "").lower()
 
@@ -590,46 +591,70 @@ class H11BuildProxyCallback(SslProxyCallback):
         # ---------------- 处理 Gzip ----------------
         if "gzip" in encoding:
             try:
-                # 兼容多段 gzip
                 with gzip.GzipFile(fileobj=io.BytesIO(resp.body), mode='rb') as f:
-                    decoded = f.read()
-                resp.body = decoded
+                    resp.body = f.read()
                 resp.remove_header(ce_key)
                 return "gzip"
             except Exception as e:
-                logger.error(f"[H11-BUILD] Gzip decompress error: {e}")
+                logger.error(f"Gzip decompress error: {e}")
                 return None
 
         # ---------------- 处理 Brotli (br) ----------------
         elif "br" in encoding:
             if brotli is None:
-                logger.warning("[H11-BUILD] Server returned 'br' but brotli module is missing.")
+                logger.warning("Server returned 'br' but brotli module is missing.")
                 return None
-            
             try:
-                decoded = brotli.decompress(resp.body)
-                resp.body = decoded
+                resp.body = brotli.decompress(resp.body)
                 resp.remove_header(ce_key)
                 return "br"
             except Exception as e:
-                logger.error(f"[H11-BUILD] Brotli decompress error: {e}")
+                logger.error(f"Brotli decompress error: {e}")
                 return None
-        
-        # ---------------- 处理 Deflate (可选) ----------------
-        
+
+        # ---------------- 处理 Zstd ----------------
+        elif "zstd" in encoding:
+            if zstd is None:
+                logger.warning("Server returned 'zstd' but zstandard module is missing.")
+                return None
+            try:
+                dctx = zstd.ZstdDecompressor()
+                resp.body = dctx.decompress(resp.body)
+                resp.remove_header(ce_key)
+                return "zstd"
+            except Exception as e:
+                logger.error(f"Zstd decompress error: {e}")
+                return None
+
+        # ---------------- 处理 Deflate ----------------
+        elif "deflate" in encoding:
+            try:
+                # 注意：有些服务器返回的 deflate 不带 zlib 头部
+                # 使用 -zlib.MAX_WBITS 可以处理原始(raw) deflate 数据
+                resp.body = zlib.decompress(resp.body, -zlib.MAX_WBITS)
+            except zlib.error:
+                try:
+                    # 如果失败，尝试标准 zlib 解压
+                    resp.body = zlib.decompress(resp.body)
+                except Exception as e:
+                    logger.error(f"Deflate decompress error: {e}")
+                    return None
+            resp.remove_header(ce_key)
+            return "deflate"
+
         return None
 
     @staticmethod
-    def _wrap_response_body(resp: SimpleResponse, original_encoding: str | None) -> None:
+    def _wrap_response_body(resp: "SimpleResponse", original_encoding: str | None) -> None:
         if not original_encoding or not resp.body:
             return
 
         ce_key = "content-encoding"
 
         try:
+            # ---------------- 重压缩 Gzip ----------------
             if original_encoding == "gzip":
                 buf = io.BytesIO()
-                # compresslevel=6 默认平衡
                 with gzip.GzipFile(fileobj=buf, mode='wb', compresslevel=6) as f:
                     f.write(resp.body)
                 resp.body = buf.getvalue()
@@ -638,18 +663,27 @@ class H11BuildProxyCallback(SslProxyCallback):
             # ---------------- 重压缩 Brotli ----------------
             elif original_encoding == "br":
                 if brotli:
-                    # quality=11 是 brotli 的默认最高压缩比，但为了速度可以用 4-6
                     resp.body = brotli.compress(resp.body, quality=4)
                     resp.set_header(ce_key, "br")
-                else:
-                    # 极端情况：刚才解压了但现在库没了？或者逻辑错误
-                    pass
+
+            # ---------------- 重压缩 Zstd ----------------
+            elif original_encoding == "zstd":
+                if zstd:
+                    cctx = zstd.ZstdCompressor(level=3) # 3 是 zstd 默认平衡等级
+                    resp.body = cctx.compress(resp.body)
+                    resp.set_header(ce_key, "zstd")
+
+            # ---------------- 重压缩 Deflate ----------------
+            elif original_encoding == "deflate":
+                # 标准 deflate 压缩
+                resp.body = zlib.compress(resp.body)
+                resp.set_header(ce_key, "deflate")
 
         except Exception as e:
-            logger.error(f"[H11-BUILD] Re-compression ({original_encoding}) failed: {e}")
-            # 如果重压缩失败，千万别加 Content-Encoding 头
-            # 这样客户端会收到明文，虽然浪费流量但能正常显示，不会报错
+            logger.error(f"Re-compression ({original_encoding}) failed: {e}")
 
+    # ---------------- Content-Length / chunked 修正 ----------------
+    
     @staticmethod
     def _fix_request_headers_after_flow(req: SimpleRequest, keep_chunked: bool) -> None:
         """
