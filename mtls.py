@@ -117,7 +117,7 @@ def parse_args() -> argparse.Namespace:
         "--timeout",
         type=float,
         default=-1,
-        help="Timeout for SSL connections Set to -1 to disable timeout.",
+        help="Timeout for SSL connections Set to -1 to disable timeout. (default: -1)",
     )
     parser.add_argument(
         "--upstream",
@@ -134,8 +134,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         default=False,
         help=(
-            "Use raw protocol instead of SSL/TLS. "
-            "This option is only available for TCP protocol."
+            "Use raw protocol instead of TLS/DTLS. "
         ),
     )
 
