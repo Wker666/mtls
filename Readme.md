@@ -463,7 +463,7 @@ HttpIntercept = MyHacker
 1.  **Header 规范化**：所有传入插件的 Header Key 均已转为小写。在调用 `set_header` 或访问 `headers` 字典时，无需担心大小写敏感问题。
 2.  **二进制安全**：`body` 字段始终为 `bytes` 类型。在进行内容查找或替换时，请务必使用 `b'string'` 语法。
 3.  **自动长度修正**：当你修改了 `resp.body` 后，`http.py` 引擎在将数据发回客户端前，会自动计算 `len(body)` 并重写 `Content-Length` 响应头，防止浏览器因长度不符而报错。
-4.  **上下文追踪**：通过 `request_id`，你可以在 `request` 和 `response` 之间传递状态信息（例如在 `request` 时存入字典，在 `response` 时读取）。
+4.  **上下文追踪**： 一个Http请求代表一个 `HttpIntercept` ，你可以在 `request` 和 `response` 之间传递状态信息（例如在 `request` 时存入字典，在 `response` 时读取）。
 
 ---
 
