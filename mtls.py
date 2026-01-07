@@ -2,6 +2,7 @@
 
 import argparse
 import importlib.util
+import logging
 import os
 import signal
 import sys
@@ -9,10 +10,12 @@ from pathlib import Path
 import threading
 from typing import List, Type
 
+from tls_hijack.log.logger_util import setup_logging
 from tls_hijack.protocol_type import ProtocolType
 from tls_hijack.ssl_proxy import SslProxy
 from tls_hijack.upstream_type import UpstreamType
 
+logger = logging.getLogger(__name__)
 
 def load_module_from_path(path: str, module_name: str | None = None):
     path_obj = Path(path).resolve()
@@ -93,6 +96,7 @@ def parse_args() -> argparse.Namespace:
         default="certs/ca-cert.pem",
         help="Path to server certificate file (default: certs/ca-cert.pem)",
     )
+
     parser.add_argument(
         "--key-file",
         default="certs/ca-key.pem",
@@ -135,6 +139,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    parser.add_argument(
+        "--log-to-file",
+        dest="log_to_file",
+        default=None,
+        help=(
+            "Path to log file. If omitted, logs will be printed to console."
+        ),
+    )
+
     return parser.parse_known_args()
 
 def main():
@@ -142,8 +155,9 @@ def main():
         try:
             proxy.stop()
         except Exception as e:
-            print(f"proxy.stop() 发生异常: {e}", file=sys.stderr)
-        print('Goodbye!')
+            logger.error(f"proxy.stop() exception: {e}")
+                
+        logger.info('Goodbye!')
         sys.exit(0)
 
     args,unknown_args = parse_args()
@@ -180,6 +194,7 @@ def main():
     listen_port = args.listen_port
     raw_protocol = args.raw_protocol
 
+    setup_logging(level=logging.INFO,log_to_file=args.log_to_file, enabled=True)
 
     proxy = SslProxy(
         listen_port = listen_port,
@@ -202,7 +217,7 @@ def main():
         signal.signal(signal.SIGINT, handle_sigint)
         ok = proxy.start()
         if not ok:
-            print("Failed to start proxy")
+            logger.error("Failed to start proxy")
             return 1
     
     return 0

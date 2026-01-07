@@ -1,3 +1,4 @@
+import logging
 import socket
 from OpenSSL import SSL
 import threading
@@ -7,6 +8,8 @@ from typing import Callable, Optional
 
 from tls_hijack.base_client import BaseClient
 from tls_hijack.disconnect_reason import DisconnectionReason
+
+logger = logging.getLogger(__name__)
 
 MessageCallback = Callable[["DtlsClient", bytes], None]
 DisconnectionCallback = Callable[["DtlsClient", DisconnectionReason], None]
@@ -89,7 +92,7 @@ class DtlsClient(BaseClient):
             # 关键：UDP connect
             raw_sock.connect((self.host, self.port))
         except OSError as e:
-            print("socket/connect error:", e)
+            logger.error("socket/connect error: %s", e)
             return False
 
         try:
@@ -101,7 +104,7 @@ class DtlsClient(BaseClient):
             self.ssl_conn.set_tlsext_host_name(self.host.encode('utf-8'))
             
         except Exception as e:
-            print("SSL connect error:", e)
+            logger.error("SSL connect error: %s", e)
             raw_sock.close()
             return False
 
@@ -109,11 +112,11 @@ class DtlsClient(BaseClient):
         try:
             self.ssl_conn.do_handshake()
         except SSL.Error as e:
-            print(f"Handshake failed: {e}")
+            logger.error("Handshake failed: %s", e)
             raw_sock.close()
             return False
         except socket.timeout:
-            print("Handshake timed out")
+            logger.error("Handshake timed out")
             raw_sock.close()
             return False
 
@@ -142,7 +145,7 @@ class DtlsClient(BaseClient):
             self.ssl_conn.sendall(data)
             return True
         except (OSError, SSL.Error) as e:
-            print("SSL write error:", e)
+            logger.error("SSL write error: %s", e)
             # 写失败视为被动断开
             self._finish(DisconnectionReason.Passive)
             return False
@@ -165,7 +168,7 @@ class DtlsClient(BaseClient):
                     self.timeout if self.timeout != -1 else None
                 )
             except (OSError, ValueError) as e:
-                print("select error in DtlsClient:", e)
+                logger.error("select error in DtlsClient: %s", e)
                 self._finish(DisconnectionReason.Passive)
                 return
 
@@ -191,11 +194,11 @@ class DtlsClient(BaseClient):
                     self._finish(DisconnectionReason.Passive)
                     return
                 except SSL.Error as e:
-                    print(f"SSL read error in DtlsClient: {e}")
+                    logger.error("SSL read error in DtlsClient: %s", e)
                     self._finish(DisconnectionReason.Passive)
                     return
                 except OSError as e:
-                    print(f"Socket read error in DtlsClient: {e}")
+                    logger.error("Socket read error in DtlsClient: %s", e)
                     self._finish(DisconnectionReason.Passive)
                     return
 

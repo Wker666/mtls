@@ -1,3 +1,4 @@
+import logging
 import socket
 import ssl
 import threading
@@ -14,6 +15,9 @@ from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat
 
 from tls_hijack.base_server import BaseServer
 from tls_hijack.disconnect_reason import DisconnectionReason
+
+
+logger = logging.getLogger(__name__)
 
 # 回调签名：
 # MessageCallback(SslServer, client_fd: int, data: bytes)
@@ -261,7 +265,7 @@ class SslServer(BaseServer):
             self.server_sock.bind(("", self.port))
             self.server_sock.listen()
         except OSError as e:
-            print("socket/bind/listen error:", e)
+            logger.error("socket/bind/listen error: %s", e)
             if self.server_sock:
                 self.server_sock.close()
                 self.server_sock = None
@@ -284,11 +288,11 @@ class SslServer(BaseServer):
             try:
                 ssl_sock = self.ctx.wrap_socket(client_sock, server_side=True)
             except ssl.SSLError as e:
-                print("SSL handshake error with client:", e)
+                logger.error("SSL handshake error with client: %s", e)
                 client_sock.close()
                 continue
             except Exception as e:
-                print("Unknown error with client:", e)
+                logger.error("Unknown error with client: %s", e)
                 client_sock.close()
                 continue
 
@@ -398,7 +402,7 @@ class SslServer(BaseServer):
             ssl_sock.sendall(data)
             return True
         except OSError as e:
-            print(f"sendMessageToClient error (fd={client_fd}):", e)
+            logger.error(f"sendMessageToClient error (fd={client_fd}): %s", e)
             # 出错时可以视为被动断开
             self._close_connection(client_fd, DisconnectionReason.Passive)
             return False
@@ -452,7 +456,7 @@ class SslServer(BaseServer):
                     self.timeout if self.timeout != -1 else None
                 )
             except OSError as e:
-                print(f"select error for client {client_fd}:", e)
+                logger.error(f"select error for client {client_fd}: %s", e)
                 # 视为被动断开
                 self._close_connection(client_fd, DisconnectionReason.Passive)
                 break
@@ -476,7 +480,7 @@ class SslServer(BaseServer):
                 try:
                     data = ssl_sock.recv(buffer_size)
                 except OSError as e:
-                    print(f"SSL read error (client {client_fd}):", e)
+                    logger.error(f"SSL read error (client {client_fd}): %s", e)
                     self._close_connection(client_fd, DisconnectionReason.Passive)
                     break
 

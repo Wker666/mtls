@@ -22,96 +22,6 @@ from tls_hijack.ssl_proxy_callback import SslProxyCallback
 from tls_hijack.upstream_type import UpstreamType
 
 
-# ===================== 彩色日志工具 =====================
-
-# 多平台颜色支持
-colorama_init(autoreset=True)
-
-class ColoredFormatter(logging.Formatter):
-    """
-    命令行彩色日志格式化：
-    - 根据 level 给 levelname 上色
-    - 其他部分保持普通文本
-    """
-
-    LEVEL_STYLES = {
-        logging.DEBUG: (Fore.BLUE, False),
-        logging.INFO: (Fore.GREEN, False),
-        logging.WARNING: (Fore.YELLOW, True),
-        logging.ERROR: (Fore.RED, True),
-        logging.CRITICAL: (Fore.MAGENTA, True),
-    }
-
-    def __init__(self, fmt: str, datefmt: str | None = None, use_color: bool = True):
-        super().__init__(fmt, datefmt)
-        self.use_color = use_color
-
-    def format(self, record: logging.LogRecord) -> str:
-        levelno = record.levelno
-        original_levelname = record.levelname  # e.g. "INFO", "WARNING"
-
-        try:
-            # 固定宽度（根据你最长的 levelname 来，一般 8 足够）
-            padded = original_levelname.ljust(8)
-
-            if self.use_color and levelno in self.LEVEL_STYLES:
-                color, bold = self.LEVEL_STYLES[levelno]
-                if bold:
-                    levelname_color = f"{Style.BRIGHT}{color}{padded}{Style.RESET_ALL}"
-                else:
-                    levelname_color = f"{color}{padded}{Style.RESET_ALL}"
-                record.levelname = levelname_color
-            else:
-                record.levelname = padded
-
-            return super().format(record)
-        finally:
-            record.levelname = original_levelname
-
-
-def setup_logging(
-    level: int = logging.INFO,
-    use_color: bool = True,
-    log_to_file: str | None = None,
-    enabled: bool = True,
-) -> None:
-
-    root = logging.getLogger()
-
-    while root.handlers:
-        root.handlers.pop()
-
-    if not enabled:
-        # 不启用日志输出：设置成最高等级并加 NullHandler
-        root.setLevel(logging.CRITICAL + 1)
-        root.addHandler(logging.NullHandler())
-        return
-
-    root.setLevel(level)
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_fmt = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
-    console_formatter = ColoredFormatter(
-        fmt=console_fmt,
-        datefmt="%H:%M:%S",
-        use_color=use_color,
-    )
-    console_handler.setFormatter(console_formatter)
-    root.addHandler(console_handler)
-
-    if log_to_file:
-        file_handler = logging.FileHandler(log_to_file, encoding="utf-8")
-        file_fmt = "%(asctime)s %(levelname)s [%(name)s] %(message)s"
-        file_formatter = logging.Formatter(
-            fmt=file_fmt,
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        file_handler.setFormatter(file_formatter)
-        root.addHandler(file_handler)
-
-
-# ===================== 日志配置 =====================
-
 logger = logging.getLogger(__name__)
 
 # 在库代码里不主动 basicConfig，由上层应用调用 setup_logging
@@ -683,7 +593,7 @@ class H11BuildProxyCallback(SslProxyCallback):
             logger.error(f"Re-compression ({original_encoding}) failed: {e}")
 
     # ---------------- Content-Length / chunked 修正 ----------------
-    
+
     @staticmethod
     def _fix_request_headers_after_flow(req: SimpleRequest, keep_chunked: bool) -> None:
         """

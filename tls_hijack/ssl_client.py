@@ -3,9 +3,13 @@ import ssl
 import threading
 import select
 from typing import Callable, Optional
+import logging
 
 from tls_hijack.base_client import BaseClient
 from tls_hijack.disconnect_reason import DisconnectionReason
+
+
+logger = logging.getLogger(__name__)
 
 # 回调类型定义
 MessageCallback = Callable[["SslClient", bytes], None]
@@ -76,7 +80,7 @@ class SslClient(BaseClient):
         try:
             raw_sock = socket.create_connection((self.host, self.port))
         except OSError as e:
-            print("socket/connect error:", e)
+            logger.error("socket/connect error: %s", e)
             return False
 
         try:
@@ -85,11 +89,11 @@ class SslClient(BaseClient):
                 server_hostname=self.host,  # SNI & 主机名校验
             )
         except ssl.SSLError as e:
-            print("SSL connect error:", e)
+            logger.error("SSL connect error: %s", e)
             raw_sock.close()
             return False
         except Exception as e:
-            print("SSL connect error:", e)
+            logger.error("SSL connect error: %s", e)
             raw_sock.close()
             return False
 
@@ -117,7 +121,7 @@ class SslClient(BaseClient):
             self.ssl_sock.sendall(data)
             return True
         except OSError as e:
-            print("SSL write error:", e)
+            logger.error("SSL write error: %s", e)
             # 写失败视为被动断开
             self._finish(DisconnectionReason.Passive)
             return False
@@ -142,7 +146,7 @@ class SslClient(BaseClient):
                     self.timeout if self.timeout != -1 else None
                 )
             except OSError as e:
-                print("select error in SslClient:", e)
+                logger.error("select error in SslClient: %s", e)
                 self._finish(DisconnectionReason.Passive)
                 return
 
@@ -164,7 +168,7 @@ class SslClient(BaseClient):
                 try:
                     data = self.ssl_sock.recv(buffer_size)
                 except OSError as e:
-                    print("SSL read error in SslClient:", e)
+                    logger.error("SSL read error in SslClient: %s", e)
                     self._finish(DisconnectionReason.Passive)
                     return
 

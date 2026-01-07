@@ -2,9 +2,13 @@ import socket
 import threading
 import select
 from typing import Callable, Optional
+import logging
 
 from tls_hijack.base_client import BaseClient
 from tls_hijack.disconnect_reason import DisconnectionReason
+
+
+logger = logging.getLogger(__name__)
 
 
 MessageCallback = Callable[["TcpClient", bytes], None]
@@ -65,7 +69,7 @@ class TcpClient(BaseClient):
         try:
             sock = socket.create_connection((self.host, self.port))
         except OSError as e:
-            print("socket/connect error:", e)
+            logger.error("socket/connect error: %s", e)
             return False
 
         self.sock = sock
@@ -95,7 +99,7 @@ class TcpClient(BaseClient):
             self.sock.sendall(data)
             return True
         except OSError as e:
-            print("TCP write error:", e)
+            logger.error("TCP write error: %s", e)
             # 写失败视为被动断开
             self._finish(DisconnectionReason.Passive)
             return False
@@ -121,7 +125,7 @@ class TcpClient(BaseClient):
                     self.timeout if self.timeout != -1 else None
                 )
             except OSError as e:
-                print("select error in TcpClient:", e)
+                logger.error("select error in TcpClient: %s", e)
                 self._finish(DisconnectionReason.Passive)
                 return
 
@@ -143,7 +147,7 @@ class TcpClient(BaseClient):
                 try:
                     data = self.sock.recv(buffer_size)
                 except OSError as e:
-                    print("TCP read error in TcpClient:", e)
+                    logger.error("TCP read error in TcpClient: %s", e)
                     self._finish(DisconnectionReason.Passive)
                     return
 

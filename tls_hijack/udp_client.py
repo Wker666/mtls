@@ -2,9 +2,12 @@ import socket
 import threading
 import select
 from typing import Callable, Optional
+import logging
 
 from tls_hijack.base_client import BaseClient
 from tls_hijack.disconnect_reason import DisconnectionReason
+
+logger = logging.getLogger(__name__)
 
 # 回调签名
 MessageCallback = Callable[["UdpClient", bytes], None]
@@ -65,7 +68,7 @@ class UdpClient(BaseClient):
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.connect((self.host, self.port))
         except OSError as e:
-            print("UDP socket/connect error:", e)
+            logger.error("UDP socket/connect error: %s", e)
             return False
 
         self.running = True
@@ -92,7 +95,7 @@ class UdpClient(BaseClient):
             self.sock.send(data)
             return True
         except OSError as e:
-            print("UDP write error:", e)
+            logger.error("UDP write error: %s", e)
             # 对于 UDP，写失败（如网络不可达）视为被动断开
             self._finish(DisconnectionReason.Passive)
             return False
@@ -115,7 +118,7 @@ class UdpClient(BaseClient):
                     self.timeout if self.timeout != -1 else None
                 )
             except OSError as e:
-                print("select error in UdpClient:", e)
+                logger.error("select error in UdpClient: %s", e)
                 self._finish(DisconnectionReason.Passive)
                 return
 
@@ -140,11 +143,11 @@ class UdpClient(BaseClient):
                     # 注意：UDP recv 返回空字节不代表断开（UDP无状态），
                     # 但在某些系统上，如果收到 ICMP Port Unreachable 会抛出 ConnectionRefusedError
                 except ConnectionRefusedError:
-                    print("UDP connection refused (ICMP Unreachable)")
+                    logger.error("UDP connection refused (ICMP Unreachable)")
                     self._finish(DisconnectionReason.Passive)
                     break
                 except OSError as e:
-                    print("UDP read error in UdpClient:", e)
+                    logger.error("UDP read error in UdpClient: %s", e)
                     self._finish(DisconnectionReason.Passive)
                     return
 

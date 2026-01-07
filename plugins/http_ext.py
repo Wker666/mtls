@@ -27,7 +27,7 @@ from textual.widgets._data_table import RowKey
 from tls_hijack.protocol_type import ProtocolType
 from tls_hijack.ssl_proxy import SslProxy
 from tls_hijack.upstream_type import UpstreamType
-from http import HttpFlowHandler, SimpleRequest, SimpleResponse, setup_logging
+from http import HttpFlowHandler, SimpleRequest, SimpleResponse
 
 # ======================= 1. 模型与状态管理 =======================
 
@@ -511,7 +511,6 @@ def get_http_flow_handler() -> HttpFlowHandler:
     return MyHttpFlowHandler()
 
 def start_tui(*args, **kwargs):
-    setup_logging(level=logging.INFO, enabled=False)
     ConnListApp().run()
 
 init_complete = start_tui

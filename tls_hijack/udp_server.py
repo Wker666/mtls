@@ -4,9 +4,13 @@ import select
 import struct
 from typing import Callable, Optional, Dict, Tuple, List
 from enum import IntEnum
+import logging
 
 from tls_hijack.base_server import BaseServer
 from tls_hijack.disconnect_reason import DisconnectionReason
+
+
+logger = logging.getLogger(__name__)
 
 MessageCallback = Callable[["UdpServer", int, bytes], None]
 ConnectionCallback = Callable[["UdpServer", str, int, int], None]
@@ -91,7 +95,7 @@ class UdpServer(BaseServer):
             
             self.server_sock.bind(("", self.port))
         except OSError as e:
-            print(f"[UdpServer] Bind error: {e}")
+            logger.error(f"[UdpServer] Bind error: {e}")
             return False
 
         self.running = True
@@ -156,7 +160,7 @@ class UdpServer(BaseServer):
 
             except Exception as e:
                 if self.running:
-                    print(f"[UdpServer] Accept loop error: {e}")
+                    logger.error(f"[UdpServer] Accept loop error: {e}")
                 else:
                     break
         return True

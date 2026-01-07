@@ -1,3 +1,4 @@
+import logging
 import socket
 from OpenSSL import SSL, crypto
 import threading
@@ -15,6 +16,8 @@ from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat
 
 from tls_hijack.base_server import BaseServer
 from tls_hijack.disconnect_reason import DisconnectionReason
+
+logger = logging.getLogger(__name__)
 
 # 回调签名适配
 MessageCallback = Callable[["DtlsServer", int, bytes], None]
@@ -173,7 +176,7 @@ class DtlsServer(BaseServer):
             self.server_sock.setsockopt(socket.SOL_IP, 20, 1) # IP_RECVORIGDSTADDR
             self.server_sock.bind(("", self.port))
         except OSError as e:
-            print("socket/bind error:", e)
+            logger.error("socket/bind error: %s", e)
             return False
 
         self.running = True
@@ -225,7 +228,7 @@ class DtlsServer(BaseServer):
                 t.start()
 
             except Exception as e:
-                if self.running: print(f"Accept loop error: {e}")
+                if self.running: logger.error("Accept loop error: %s", e)
                 else: break
         return True
 

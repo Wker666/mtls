@@ -72,8 +72,8 @@ pip install -r requirements.txt
 参数说明：
 
 ```bash
-usage: mtls.py [-h] -s CALLBACK_SCRIPT_PATH [-u] [-p LISTEN_PORT] [--cert-file CERT_FILE] [--key-file KEY_FILE] [--tmp-pem-dir TMP_PEM_DIR] [--timeout TIMEOUT]
-               [--upstream UPSTREAM] [--raw-protocol]
+usage: mtls.py [-h] -s CALLBACK_SCRIPT_PATH [-u] [-p LISTEN_PORT] [--cert-file CERT_FILE] [--key-file KEY_FILE] [--tmp-pem-dir TMP_PEM_DIR] [--timeout TIMEOUT] [--upstream UPSTREAM] [--raw-protocol]
+               [--log-to-file LOG_TO_FILE]
 
 SSL proxy with pluggable callback script
 
@@ -92,6 +92,8 @@ options:
   --timeout TIMEOUT     Timeout for SSL connections Set to -1 to disable timeout.
   --upstream UPSTREAM   Optional fixed upstream address in the form host:port. If omitted, the proxy will use the original target host and port.
   --raw-protocol        Use raw protocol instead of SSL/TLS. This option is only available for TCP protocol.
+  --log-to-file LOG_TO_FILE
+                        Path to log file. If omitted, logs will be printed to console.
 ```
 
 ## 使用示例
