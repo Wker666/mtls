@@ -1,6 +1,7 @@
 import binascii
 import io
 import logging
+import queue
 import time
 import json
 import argparse
@@ -543,6 +544,7 @@ def start_tui(proxy: SslProxy, protocol: ProtocolType, upstream_type: UpstreamTy
     global _GLOBAL_USER_PLUGIN
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--plugin", help="Path to user python script")
+    parser.add_argument("--no-ui", action="store_true", help="Run without UI (Headless mode)") 
     args, _ = parser.parse_known_args(unknown_args)
 
     if args.plugin:
@@ -564,6 +566,21 @@ def start_tui(proxy: SslProxy, protocol: ProtocolType, upstream_type: UpstreamTy
                 logger.error(f"Failed to load plugin: {e}")
 
         
-    ConnListApp().run()
+    if args.no_ui:
+        if _GLOBAL_USER_PLUGIN:
+            logger.info(f"[*] Plugin loaded: {args.plugin}")
+        try:
+            while True:
+                try:
+                    event = SessionManager.EVENT_QUEUE.get(timeout=1)
+                    if event.status and event.id in SessionManager.DETAIL_STORE:
+                        del SessionManager.DETAIL_STORE[event.id]
+                except queue.Empty:
+                    pass
+        except KeyboardInterrupt:
+            logger.info("\n[*] Stopping...")
+    else:
+        app = ConnListApp()
+        app.run()
 
 init_complete = start_tui

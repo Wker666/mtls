@@ -64,7 +64,7 @@ pip install -r requirements.txt
 
 ```bash
 usage: mtls.py [-h] -s CALLBACK_SCRIPT_PATH [-u] [-p LISTEN_PORT] [--cert-file CERT_FILE] [--key-file KEY_FILE] [--tmp-pem-dir TMP_PEM_DIR]
-               [--timeout TIMEOUT] [--upstream UPSTREAM] [--raw-protocol] [--log-to-file LOG_TO_FILE]
+               [--timeout TIMEOUT] [--upstream UPSTREAM] [--raw-protocol] [--log-to-file LOG_TO_FILE] [--no-log]
 
 SSL proxy with pluggable callback script
 
@@ -79,13 +79,13 @@ options:
                         Path to server certificate file (default: certs/ca-cert.pem)
   --key-file KEY_FILE   Path to server private key file (default: certs/ca-key.pem)
   --tmp-pem-dir TMP_PEM_DIR
-                        Directory to store generated leaf certificate/key PEM files (default: ./tmp). WARNING: this directory may be cleared on
-                        startup.
+                        Directory to store generated leaf certificate/key PEM files (default: ./tmp). WARNING: this directory may be cleared on startup.
   --timeout TIMEOUT     Timeout for SSL connections Set to -1 to disable timeout. (default: -1)
   --upstream UPSTREAM   Optional fixed upstream address in the form host:port. If omitted, the proxy will use the original target host and port.
   --raw-protocol        Use raw protocol instead of TLS/DTLS.
   --log-to-file LOG_TO_FILE
                         Path to log file. If omitted, logs will be printed to console.
+  --no-log              Disable logging to file.
 ```
 
 ---
@@ -104,6 +104,7 @@ options:
 > | `--raw-protocol`| 无 | 使用原始协议（透传）而非 TLS/DTLS 加密。| 否 | 否 |
 > | `--log-to-file` | 无 | 将日志输出到指定的文件路径。若省略，日志将直接打印到控制台。 | 无 | 否 |
 > | `--help` | `-h` | 显示帮助信息并退出。 | 无 | 否 |
+> | `--no-log` | 无 | 禁用日志记录。 | 否 | 否 |
 
 ---
 
@@ -454,9 +455,19 @@ HttpIntercept = MyHacker
 
 使用 `-s` 参数指定 `http.py` 引擎，使用 `--plugin` 指定你的业务脚本：
 
+
+以下是针对这两个参数的说明表格：
+
+| 参数 | 类型 | 作用描述 | 典型应用场景 |
+| :--- | :--- | :--- | :--- |
+| **`--plugin`** | 字符串 (路径) | 指定用户自定义 Python 脚本的路径。程序会自动加载该脚本中的 `HttpIntercept` 类，允许用户在 `request` 和 `response` 阶段拦截并修改数据包。 | 需要修改请求头、篡改响应体、或者记录特定流量日志时。 |
+| **`--no-ui`** | 开关 (Flag) | 启用“无界面模式”（Headless）。程序启动后不会渲染 TUI 界面，仅在后台运行代理服务和插件逻辑，并会自动清理处理完的请求以节省内存。 | 在 Linux 服务器上挂机运行、自动化测试、或者不需要查看实时流量只需插件处理时。 |
+
+---
+
 ```bash
 # 启动代理并加载篡改脚本
-./mtls.py -s plugins/http.py --plugin hacker_script.py
+./mtls.py -s plugins/http.py --plugin hacker_script.py --no-ui
 ```
 
 ### 关键技术特性

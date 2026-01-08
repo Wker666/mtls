@@ -147,6 +147,13 @@ def parse_args() -> argparse.Namespace:
         ),
     )
 
+    parser.add_argument(
+        "--no-log",
+        action="store_true",
+        default=False,
+        help="Disable logging to file.",
+    )
+
     return parser.parse_known_args()
 
 def main():
@@ -193,7 +200,7 @@ def main():
     listen_port = args.listen_port
     raw_protocol = args.raw_protocol
 
-    setup_logging(level=logging.INFO,log_to_file=args.log_to_file, enabled=True)
+    setup_logging(level=logging.INFO,log_to_file=args.log_to_file, enabled=not args.no_log)
 
     proxy = SslProxy(
         listen_port = listen_port,
