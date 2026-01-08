@@ -73,6 +73,7 @@ class TcpClient(BaseClient):
             return False
 
         self.sock = sock
+        self.sock.settimeout(1.0)
         self.running = True
         self.disconnection_reason = DisconnectionReason.NoneReason
 
@@ -146,8 +147,12 @@ class TcpClient(BaseClient):
             if self.sock in rlist:
                 try:
                     data = self.sock.recv(buffer_size)
+
+                except socket.timeout:
+                    continue 
                 except OSError as e:
-                    logger.error("TCP read error in TcpClient: %s", e)
+                    if not self.running:
+                        logger.error("TCP read error in TcpClient: %s", e)
                     self._finish(DisconnectionReason.Passive)
                     return
 
@@ -192,14 +197,6 @@ class TcpClient(BaseClient):
         except OSError:
             pass
 
-        # 等待接收线程结束（如果是从接收线程自身调用，is_alive 会是 False）
-        if (
-            self.receive_thread
-            and self.receive_thread.is_alive()
-            and threading.current_thread() is not self.receive_thread
-        ):
-            self.receive_thread.join()
-
         # 关闭 socket 与中断管道
         if self.sock:
             try:
@@ -216,6 +213,14 @@ class TcpClient(BaseClient):
             self._w_interrupt.close()
         except OSError:
             pass
+
+        # 等待接收线程结束（如果是从接收线程自身调用，is_alive 会是 False）
+        if (
+            self.receive_thread
+            and self.receive_thread.is_alive()
+            and threading.current_thread() is not self.receive_thread
+        ):
+            self.receive_thread.join()
 
         # 回调
         if self.disconnection_callback:

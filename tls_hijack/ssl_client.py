@@ -88,6 +88,7 @@ class SslClient(BaseClient):
                 raw_sock,
                 server_hostname=self.host,  # SNI & 主机名校验
             )
+            self.ssl_sock.settimeout(1.0) # 这里设置的是接受超时，主要防止线程阻塞
         except ssl.SSLError as e:
             logger.error("SSL connect error: %s", e)
             raw_sock.close()
@@ -167,8 +168,12 @@ class SslClient(BaseClient):
             if self.ssl_sock in rlist:
                 try:
                     data = self.ssl_sock.recv(buffer_size)
+
+                except socket.timeout:
+                    continue 
                 except OSError as e:
-                    logger.error("SSL read error in SslClient: %s", e)
+                    if not self.running:
+                        logger.error("SSL read error in SslClient: %s", e)
                     self._finish(DisconnectionReason.Passive)
                     return
 
@@ -212,9 +217,6 @@ class SslClient(BaseClient):
         except OSError:
             pass
 
-        # 等待接收线程结束（如果是从接收线程自身调用，is_alive 会是 False）
-        if self.receive_thread and self.receive_thread.is_alive() and threading.current_thread() is not self.receive_thread:
-            self.receive_thread.join()
 
         # 关闭 socket 与中断管道
         if self.ssl_sock:
@@ -233,6 +235,10 @@ class SslClient(BaseClient):
         except OSError:
             pass
 
+        # 等待接收线程结束（如果是从接收线程自身调用，is_alive 会是 False）
+        if self.receive_thread and self.receive_thread.is_alive() and threading.current_thread() is not self.receive_thread:
+            self.receive_thread.join()
+            
         # 回调
         if self.disconnection_callback:
             self.disconnection_callback(self, self.disconnection_reason)

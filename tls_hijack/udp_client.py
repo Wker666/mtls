@@ -181,13 +181,6 @@ class UdpClient(BaseClient):
         except OSError:
             pass
 
-        # 等待线程结束
-        if (
-            self.receive_thread
-            and self.receive_thread.is_alive()
-            and threading.current_thread() is not self.receive_thread
-        ):
-            self.receive_thread.join()
 
         # 资源清理
         if self.sock:
@@ -203,5 +196,13 @@ class UdpClient(BaseClient):
         except OSError:
             pass
 
+        # 等待线程结束
+        if (
+            self.receive_thread
+            and self.receive_thread.is_alive()
+            and threading.current_thread() is not self.receive_thread
+        ):
+            self.receive_thread.join()
+            
         if self.disconnection_callback:
             self.disconnection_callback(self, self.disconnection_reason)
