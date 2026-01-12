@@ -43,14 +43,15 @@ mtls通过插件的方式实现功能扩展，目前提供的内置插件有：
 
 ```bash
 # sudo su
-export WAN=eth0                  # WAN口网卡
-export LAN=eth1                  # LAN口网卡
+export WAN=eth0                     # WAN口网卡
+export LAN=eth1                     # LAN口网卡
 ./gateway_cnf.sh
-./gateway_cnf.sh init            # 初始化配置网关
-./gateway_cnf.sh start udp 6666  # 开启 UDP 6666 端口拦截
-./gateway_cnf.sh stop tcp 443    # 停止 TCP 443 端口拦截
-./gateway_cnf.sh check           # 检测当前系统开启的透明代理规则
-#./gateway_cnf.sh cleanup        # 清理网关配置
+./gateway_cnf.sh init               # 初始化配置网关
+./gateway_cnf.sh start udp 6666     # 开启 UDP 6666 端口拦截
+./gateway_cnf.sh start tcp 443 456  # 开启 TCP 443 端口拦截到 456 端口
+./gateway_cnf.sh stop tcp 443       # 停止 TCP 443 端口拦截
+./gateway_cnf.sh check              # 检测当前系统开启的透明代理规则
+#./gateway_cnf.sh cleanup           # 清理网关配置
 ```
 
 ## 3. 安装依赖

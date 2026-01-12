@@ -31,10 +31,14 @@ TABLE_ID=100
 ACTION=$1
 PROTO=$2
 PORT=$3
+L_PORT=${4:-$PORT}
 
 usage() {
-    echo -e "${BLUE}用法: $0 <init|start|stop|cleanup|check> [协议] [端口]${NC}"
-    echo "示例: sudo WAN=eth0 LAN=eth1 $0 init"
+    echo -e "${BLUE}用法: $0 <init|start|stop|cleanup|check> [协议] [目标端口] [本地监听端口(可选)]${NC}"
+    echo "示例:"
+    echo "  sudo $0 init"
+    echo "  sudo $0 start tcp 443       (将 443 转发到本地 443)"
+    echo "  sudo $0 start tcp 443 8080  (将 443 转发到本地 8080)"
     exit 1
 }
 
@@ -77,26 +81,27 @@ cleanup_all() {
 
 start_proxy() {
     if [[ -z "$PROTO" || -z "$PORT" ]]; then usage; fi
-    echo -e "正在启动 ${YELLOW}${PROTO^^}${NC} 端口 ${YELLOW}$PORT${NC} 的拦截..."
+    echo -e "正在启动拦截: 远程 ${YELLOW}${PROTO^^}/$PORT${NC} -> 本地 ${YELLOW}$L_PORT${NC}"
 
     if [ "$PROTO" == "udp" ]; then
         for i in /proc/sys/net/ipv4/conf/*/rp_filter; do echo 0 > $i; done
         ip rule add fwmark $FW_MARK lookup $TABLE_ID 2>/dev/null
         ip route add local 0.0.0.0/0 dev lo table $TABLE_ID 2>/dev/null
-        iptables -t mangle -D PREROUTING -i "$LAN" -p udp --dport "$PORT" -j TPROXY --tproxy-mark $FW_MARK --on-port "$PORT" --on-ip 0.0.0.0 2>/dev/null
-        iptables -t mangle -A PREROUTING -i "$LAN" -p udp --dport "$PORT" -j TPROXY --tproxy-mark $FW_MARK --on-port "$PORT" --on-ip 0.0.0.0
+        iptables -t mangle -D PREROUTING -i "$LAN" -p udp --dport "$PORT" -j TPROXY --tproxy-mark $FW_MARK --on-port "$L_PORT" --on-ip 0.0.0.0 2>/dev/null
+        iptables -t mangle -A PREROUTING -i "$LAN" -p udp --dport "$PORT" -j TPROXY --tproxy-mark $FW_MARK --on-port "$L_PORT" --on-ip 0.0.0.0
     elif [ "$PROTO" == "tcp" ]; then
-        iptables -t nat -D PREROUTING -i "$LAN" -p tcp --dport "$PORT" -j REDIRECT --to-port "$PORT" 2>/dev/null
-        iptables -t nat -A PREROUTING -i "$LAN" -p tcp --dport "$PORT" -j REDIRECT --to-port "$PORT"
+        iptables -t nat -D PREROUTING -i "$LAN" -p tcp --dport "$PORT" -j REDIRECT --to-port "$L_PORT" 2>/dev/null
+        iptables -t nat -A PREROUTING -i "$LAN" -p tcp --dport "$PORT" -j REDIRECT --to-port "$L_PORT"
     fi
 }
 
 stop_proxy() {
     if [[ -z "$PROTO" || -z "$PORT" ]]; then usage; fi
+    echo -e "正在停止拦截: 远程 ${YELLOW}${PROTO^^}/$PORT${NC}"
     if [ "$PROTO" == "udp" ]; then
-        iptables -t mangle -D PREROUTING -i "$LAN" -p udp --dport "$PORT" -j TPROXY --tproxy-mark $FW_MARK --on-port "$PORT" --on-ip 0.0.0.0 2>/dev/null
+        iptables -t mangle -D PREROUTING -i "$LAN" -p udp --dport "$PORT" -j TPROXY --tproxy-mark $FW_MARK --on-port "$L_PORT" --on-ip 0.0.0.0 2>/dev/null
     elif [ "$PROTO" == "tcp" ]; then
-        iptables -t nat -D PREROUTING -i "$LAN" -p tcp --dport "$PORT" -j REDIRECT --to-port "$PORT" 2>/dev/null
+        iptables -t nat -D PREROUTING -i "$LAN" -p tcp --dport "$PORT" -j REDIRECT --to-port "$L_PORT" 2>/dev/null
     fi
 }
 
