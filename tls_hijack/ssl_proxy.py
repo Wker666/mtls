@@ -24,6 +24,8 @@ class SslProxy:
         self,
         cert_file: str,
         key_file: str,
+        client_cert_file: Optional[str] = None,
+        client_key_file: Optional[str] = None,
         pem_tmp_dir: str = "./tmp",
         listen_port: int = 443,
         verify_target_cert: bool = False,
@@ -38,6 +40,8 @@ class SslProxy:
         self.listen_port = listen_port
         self.cert_file = cert_file
         self.key_file = key_file
+        self.client_cert_file = client_cert_file
+        self.client_key_file = client_key_file
         self.verify_target_cert = verify_target_cert
         self.pem_tmp_dir = pem_tmp_dir
 
@@ -156,6 +160,8 @@ class SslProxy:
         if self.upstream_type == UpstreamType.SSL:
             TargetClientCls = self.ClientClass
             client_kwargs = dict(
+                cert_file = self.client_cert_file,
+                key_file = self.client_key_file,
                 verify_cert=self.verify_target_cert,
                 timeout=self.timeout,
             )

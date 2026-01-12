@@ -104,6 +104,18 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--client-cert-file",
+        default=None,
+        help="Path to client certificate file (for mTls) (default: None)",
+    )
+
+    parser.add_argument(
+        "--client-key-file",
+        default=None,
+        help="Path to server private key file (for mTls) (default: None)",
+    )
+
+    parser.add_argument(
         "--tmp-pem-dir",
         dest="tmp_pem_dir",
         default="./tmp",
@@ -206,6 +218,8 @@ def main():
         listen_port = listen_port,
         cert_file=args.cert_file,
         key_file=args.key_file,
+        client_cert_file=args.client_cert_file,
+        client_key_file=args.client_key_file,
         callback_cls=CallbackCls,
         pem_tmp_dir=args.tmp_pem_dir,
         timeout=args.timeout,

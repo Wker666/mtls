@@ -21,6 +21,8 @@ class TcpClient(BaseClient):
         host: str,
         port: int,
         ca_file_or_callback,              # 保持同名同位置，但对 TCP 来说其实不用
+        cert_file: Optional[str] = None,
+        key_file: Optional[str] = None,
         verify_cert: bool = True,         # 保持签名，为了兼容；对 TCP 无意义
         maybe_callback: Optional[MessageCallback] = None,
         timeout: float = 5,

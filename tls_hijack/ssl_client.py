@@ -21,6 +21,8 @@ class SslClient(BaseClient):
         host: str,
         port: int,
         ca_file_or_callback,
+        cert_file: Optional[str] = None,
+        key_file: Optional[str] = None,
         verify_cert: bool = True,
         maybe_callback: Optional[MessageCallback] = None,
         timeout: float = 5,
@@ -30,6 +32,8 @@ class SslClient(BaseClient):
         self.port = port
         self.verify_cert = verify_cert
         self.timeout = timeout
+        self.cert_file = cert_file
+        self.key_file = key_file
 
         # 判断是 (host, port, callback) 还是 (host, port, ca_file, callback)
         if callable(ca_file_or_callback) and maybe_callback is None:
@@ -72,6 +76,11 @@ class SslClient(BaseClient):
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
 
+        if self.cert_file:
+            context.load_cert_chain(
+                certfile=self.cert_file,
+                keyfile=self.key_file
+            )
         return context
 
     # --------------------------- 连接、发送 ---------------------------

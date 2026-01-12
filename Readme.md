@@ -7,6 +7,7 @@
 | **UDP** | ✅ | ... |
 | **TLS** | ✅ | 需要patch或者信任的证书 |
 | **DTLS** | ✅ | 需要patch或者信任的证书 |
+| **mTLS** | ✅ | 需要双向patch或者信任的证书 |
 
 ### 插件
 
@@ -63,8 +64,8 @@ pip install -r requirements.txt
 参数说明：
 
 ```bash
-usage: mtls.py [-h] -s CALLBACK_SCRIPT_PATH [-u] [-p LISTEN_PORT] [--cert-file CERT_FILE] [--key-file KEY_FILE] [--tmp-pem-dir TMP_PEM_DIR]
-               [--timeout TIMEOUT] [--upstream UPSTREAM] [--raw-protocol] [--log-to-file LOG_TO_FILE] [--no-log]
+usage: mtls.py [-h] -s CALLBACK_SCRIPT_PATH [-u] [-p LISTEN_PORT] [--cert-file CERT_FILE] [--key-file KEY_FILE] [--client-cert-file CLIENT_CERT_FILE]
+               [--client-key-file CLIENT_KEY_FILE] [--tmp-pem-dir TMP_PEM_DIR] [--timeout TIMEOUT] [--upstream UPSTREAM] [--raw-protocol] [--log-to-file LOG_TO_FILE] [--no-log]
 
 SSL proxy with pluggable callback script
 
@@ -78,6 +79,10 @@ options:
   --cert-file CERT_FILE
                         Path to server certificate file (default: certs/ca-cert.pem)
   --key-file KEY_FILE   Path to server private key file (default: certs/ca-key.pem)
+  --client-cert-file CLIENT_CERT_FILE
+                        Path to client certificate file (for mTls) (default: None)
+  --client-key-file CLIENT_KEY_FILE
+                        Path to server private key file (for mTls) (default: None)
   --tmp-pem-dir TMP_PEM_DIR
                         Directory to store generated leaf certificate/key PEM files (default: ./tmp). WARNING: this directory may be cleared on startup.
   --timeout TIMEOUT     Timeout for SSL connections Set to -1 to disable timeout. (default: -1)
@@ -97,6 +102,8 @@ options:
 > | `--udp` | `-u` | 使用 UDP (DTLS) 协议代替默认的 TCP (SSL/TLS)。 | 否 (默认 TCP) | 否 |
 > | `--listen-port` | `-p` | 代理服务器监听的端口号。 | `443` | 否 |
 > | `--cert-file` | 无 | 服务器根证书文件路径，用于签发或验证。 | `certs/ca-cert.pem` | 否 |
+> | `--client-cert-file` | 无 | 客户端证书文件路径（用于 mTLS 双向认证）。 | `None` | 否 |
+> | `--client-key-file` | 无 | 客户端私钥文件路径（用于 mTLS 双向认证）。 | `None` | 否 |
 > | `--key-file` | 无 | 服务器私钥文件路径。 | `certs/ca-key.pem` | 否 |
 > | `--tmp-pem-dir` | 无 | 存储动态生成的叶子证书/私钥 PEM 文件的目录。注意：启动时该目录可能会被清空。 | `./tmp` | 否 |
 > | `--timeout` | 无 | SSL 连接的超时时间（秒）。设置为 `-1` 则禁用超时。 | `-1` | 否 |

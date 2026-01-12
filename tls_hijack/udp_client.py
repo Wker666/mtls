@@ -20,6 +20,8 @@ class UdpClient(BaseClient):
         host: str,
         port: int,
         ca_file_or_callback,              # 保持签名兼容
+        cert_file: Optional[str] = None,
+        key_file: Optional[str] = None,
         verify_cert: bool = True,         # 保持签名兼容
         maybe_callback: Optional[MessageCallback] = None,
         timeout: float = 5,
