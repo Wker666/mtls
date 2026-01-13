@@ -102,15 +102,18 @@ class DtlsServer(BaseServer):
         return ctx
 
     def _sni_callback(self, conn):
+        meta = conn.get_app_data()
         server_name = conn.get_servername()
-        hostname = server_name.decode('utf-8') if server_name else "unknown"
-        conn.set_app_data(hostname)
+        hostname = server_name.decode('utf-8') if server_name else meta['target_host']
+
         with self._lock:
             ctx = self._domain_ctx_cache.get(hostname)
             if ctx is None:
                 ctx = self._create_context_for_hostname(hostname)
                 self._domain_ctx_cache[hostname] = ctx
         conn.set_context(ctx)
+        if self.connection_callback:
+            self.connection_callback(self, hostname, meta['target_port'], meta['client_fd'])
 
     def _create_context_for_hostname(self, hostname: str) -> SSL.Context:
         cert_pem, key_pem = self._generate_cert_for_hostname(hostname)
@@ -220,8 +223,12 @@ class DtlsServer(BaseServer):
                     self.disconnection_reason_map[client_fd] = DisconnectionReason.Passive
                     self.connection_closed[client_fd] = False
 
-                if self.connection_callback:
-                    self.connection_callback(self, target_host, target_port, client_fd)
+                    ssl_conn.set_app_data({
+                        "target_host": target_host,
+                        "target_port": target_port,
+                        "client_fd": client_fd,
+                        "hostname": None 
+                    })
 
                 t = threading.Thread(target=self._handle_client, args=(client_fd, session_key), daemon=True)
                 with self._lock: self.client_threads.append(t)
