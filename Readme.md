@@ -199,8 +199,8 @@ mtls支持通过 Python 编写插件来干预、修改或注入 TLS/DTLS 流量�
 from tls_hijack.ssl_proxy_callback import SslProxyCallback
 
 class MyPlugin(SslProxyCallback):
-    def __init__(self, client_fd, host, port):
-        super().__init__(client_fd, host, port)
+    def __init__(self, client_fd: int, target_addr: tuple[str, int], client_addr: tuple[str, int]):
+        super().__init__(client_fd, target_addr, client_addr)
         # 初始化每个连接的私有状态
 
     def on_connect(self, server, target_client):
@@ -260,8 +260,8 @@ def on_send_message(self, data: bytearray):
 from tls_hijack.base_server import BoundServer
 
 class ActivePlugin(SslProxyCallback):
-    def __init__(self, client_fd, host, port):
-        super().__init__(client_fd, host, port)
+    def __init__(self, client_fd: int, target_addr: tuple[str, int], client_addr: tuple[str, int]):
+        super().__init__(client_fd, target_addr, client_addr)
         self.bound_server = None
         self.upstream = None
 
@@ -338,12 +338,12 @@ from tls_hijack.base_server import BoundServer
 logger = logging.getLogger(__name__)
 
 class TemplatePlugin(SslProxyCallback):
-    def __init__(self, client_fd, host, port):
-        super().__init__(client_fd, host, port)
+    def __init__(self, client_fd: int, target_addr: tuple[str, int], client_addr: tuple[str, int]):
+        super().__init__(client_fd, target_addr, client_addr)
         self.bound_server = None
         self.upstream = None
 
-    def on_connect(self, server, target_client):
+    def on_connect(self, server : BaseServer, target_client : BaseClient):
         self.bound_server = BoundServer(server, self.client_fd)
         self.upstream = target_client
         logger.info(f"[{self.client_fd}] Connected")
