@@ -10,7 +10,7 @@ from tls_hijack.disconnect_reason import DisconnectionReason
 
 # 回调签名定义
 MessageCallback = Callable[["TcpServer", int, bytes], None]
-ConnectionCallback = Callable[["TcpServer", str, int, int], None]
+ConnectionCallback = Callable[["TcpServer", (str, int), (str, int), int], None]
 DisconnectionCallback = Callable[["TcpServer", int, DisconnectionReason], None]
 
 class TcpServer(BaseServer):
@@ -97,7 +97,7 @@ class TcpServer(BaseServer):
                 self.connection_closed[client_fd] = False
 
             if self.connection_callback:
-                self.connection_callback(self, original_ip, original_port, client_fd)
+                self.connection_callback(self, (original_ip, original_port), (addr[0], addr[1]), client_fd)
 
             t = threading.Thread(target=self._handle_client, args=(client_fd,), daemon=True)
             with self._lock:

@@ -4,10 +4,10 @@ from tls_hijack.disconnect_reason import DisconnectionReason
 
 
 class SslProxyCallback:
-    def __init__(self, client_fd: int, host: str, port: int):
+    def __init__(self, client_fd: int, target_addr: tuple[str, int], client_addr: tuple[str, int]):
         self.client_fd = client_fd
-        self.host = host
-        self.port = port
+        self.target_addr = target_addr
+        self.client_addr = client_addr
 
     def on_connect(self, server : BaseServer, target_client: BaseClient):
         raise NotImplementedError

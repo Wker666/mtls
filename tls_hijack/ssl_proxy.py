@@ -132,15 +132,13 @@ class SslProxy:
     # ---------------------- 回调函数 ----------------------
 
     # 有新客户端接入
-    def _connection_callback(self,  server: BaseServer, host: str, port: int, client_fd: int):
+    def _connection_callback(self, server: BaseServer, target_addr: tuple[str, int], client_addr: tuple[str, int],  client_fd: int):
         """
         当有新的本地客户端连接到代理时，
         为其创建一个到目标服务器的上游连接（SslClient 或 TcpClient）。
         """
 
-        # 创建业务回调对象：其构造保持不变，如果你希望让 callback 也感知上游信息，
-        # 可以改为传 self.upstream_host/self.upstream_port
-        proxy_cb = self._proxy_cb_cls(client_fd, host, port)
+        proxy_cb = self._proxy_cb_cls(client_fd, target_addr, client_addr)
 
         # 只写 proxy_cb_map，用 cb 锁
         with self._cb_lock:
@@ -149,8 +147,8 @@ class SslProxy:
         # 选择真正要连接的上游地址/端口：
         # 优先使用构造参数中指定的 upstream_host/upstream_port；
         # 如果没有指定，就退回到当前客户端连进来的 host/port。
-        target_host = self.upstream_host or host
-        target_port = self.upstream_port or port
+        target_host = self.upstream_host or target_addr[0]
+        target_port = self.upstream_port or target_addr[1]
 
         # 目标服务器消息回调
         def on_target_message(client, data: bytes):

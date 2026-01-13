@@ -115,11 +115,11 @@ DISPATCHER = ProtocolDispatcher()
 class PySharkTuiPlugin(SslProxyCallback):
     CURRENT_PROTOCOL = ProtocolType.TCP
 
-    def __init__(self, client_fd: int, host: str, port: int):
-        super().__init__(client_fd, host, port)
+    def __init__(self, client_fd: int, target_addr: tuple[str, int], client_addr: tuple[str, int]):
+        super().__init__(client_fd, target_addr, client_addr)
         self.data_queue = queue.Queue(maxsize=2000)
         self.running = True
-        self.client_port, self.server_port = 12345, (port if port else 80)
+        self.client_port, self.server_port = client_addr[1], target_addr[1]
         self.client_seq, self.server_seq = 1001, 2001
         self.last_request_ts: Optional[float] = None
         self.analysis_thread = threading.Thread(target=self._worker, daemon=True)
@@ -193,7 +193,7 @@ class PySharkTuiPlugin(SslProxyCallback):
             current_id = GLOBAL_COUNTER
 
         event = ProtocolEvent(
-            global_id=current_id, conn_id=self.client_fd, protocol=proto_name, 
+            global_id=current_id, conn_id=f"{self.client_addr[0]}:{self.client_addr[1]}<->{self.target_addr[0]}:{self.target_addr[1]}", protocol=proto_name, 
             ts=ts, duration=duration, direction=tag, summary=summary, 
             detail="\n\n".join(detail_list)
         )

@@ -13,7 +13,7 @@ from tls_hijack.disconnect_reason import DisconnectionReason
 logger = logging.getLogger(__name__)
 
 MessageCallback = Callable[["UdpServer", int, bytes], None]
-ConnectionCallback = Callable[["UdpServer", str, int, int], None]
+ConnectionCallback = Callable[["UdpServer", (str, int), (str, int), int], None]
 DisconnectionCallback = Callable[["UdpServer", int, DisconnectionReason], None]
 
 class UdpServer(BaseServer):
@@ -146,7 +146,7 @@ class UdpServer(BaseServer):
 
                 # 1. 触发连接回调
                 if self.connection_callback:
-                    self.connection_callback(self, target_ip, target_port, client_fd)
+                    self.connection_callback(self, (target_ip, target_port), (addr[0], addr[1]), client_fd)
 
                 # 2. 触发首包的消息回调 (修复：不再 send 回去，而是交给业务层)
                 if self.message_callback:

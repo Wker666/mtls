@@ -296,8 +296,10 @@ class H11BuildProxyCallback(SslProxyCallback):
     - 正确处理 Transfer-Encoding: chunked 与 Content-Length 关系
     """
 
-    def __init__(self, client_fd: int, host: str, port: int):
-        super().__init__(client_fd, host, port)
+    def __init__(self, client_fd: int, target_addr: tuple[str, int], client_addr: tuple[str, int]):
+        super().__init__(client_fd, target_addr, client_addr)
+        self.host = target_addr[0]
+        self.port = target_addr[1]
         self._req_buffer = bytearray()
         self._resp_buffer = bytearray()
 

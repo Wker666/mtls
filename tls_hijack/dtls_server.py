@@ -113,7 +113,7 @@ class DtlsServer(BaseServer):
                 self._domain_ctx_cache[hostname] = ctx
         conn.set_context(ctx)
         if self.connection_callback:
-            self.connection_callback(self, hostname, meta['target_port'], meta['client_fd'])
+            self.connection_callback(self, (hostname, meta['target_port']), (meta['original_host'], meta['original_port']), meta['client_fd'])
 
     def _create_context_for_hostname(self, hostname: str) -> SSL.Context:
         cert_pem, key_pem = self._generate_cert_for_hostname(hostname)
@@ -226,6 +226,8 @@ class DtlsServer(BaseServer):
                     ssl_conn.set_app_data({
                         "target_host": target_host,
                         "target_port": target_port,
+                        "original_host": addr[0],
+                        "original_port": addr[1],
                         "client_fd": client_fd,
                         "hostname": None 
                     })

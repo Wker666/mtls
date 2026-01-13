@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # 回调签名：
 # MessageCallback(SslServer, client_fd: int, data: bytes)
 MessageCallback = Callable[["SslServer", int, bytes], None]
-# ConnectionCallback(SslServer, client_ip: str, client_port: int, client_fd: int)
-ConnectionCallback = Callable[["SslServer", str, int, int], None]
+# ConnectionCallback(SslServer, (target_ip, target_port), (client_ip, client_port), client_fd: int)
+ConnectionCallback = Callable[["SslServer", (str, int), (str, int), int], None]
 # DisconnectionCallback(SslServer, client_fd: int, reason: DisconnectionReason)
 DisconnectionCallback = Callable[["SslServer", int, DisconnectionReason], None]
 
@@ -310,9 +310,9 @@ class SslServer(BaseServer):
 
             if self.connection_callback:
                 if ssl_sock.sni_hostname is None:
-                    self.connection_callback(self, original_ip, original_port,  client_fd)
+                    self.connection_callback(self, (original_ip, original_port), (addr[0], addr[1]), client_fd)
                 else:
-                    self.connection_callback(self, ssl_sock.sni_hostname, original_port, client_fd)
+                    self.connection_callback(self, (ssl_sock.sni_hostname, original_port), (addr[0], addr[1]), client_fd)
 
             # 启动客户端处理线程
             t = threading.Thread(

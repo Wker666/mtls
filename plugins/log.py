@@ -14,15 +14,15 @@ logger = logging.getLogger(__name__)
 
 class LoggingProxyCallback(SslProxyCallback):
 
-    def __init__(self, client_fd: int, host: str, port: int):
-        super().__init__(client_fd, host, port)
+    def __init__(self, client_fd: int, target_addr: tuple[str, int], client_addr: tuple[str, int]):
+        super().__init__(client_fd, target_addr, client_addr)
         self.total_bytes_sent = 0
         self.total_bytes_recv = 0
 
     def on_connect(self, server: BaseServer, target_client: BaseClient):
         self.server = BoundServer(server, self.client_fd)
         self.target_client = target_client
-        logger.info(f"[CB] client_fd={self.client_fd} connected to {self.host}:{self.port}")
+        logger.info(f"[CB] client={self.client_addr} connected to {self.target_addr}")
 
     def on_send_message(self, data: bytearray) -> bytearray:
         """
@@ -41,7 +41,7 @@ class LoggingProxyCallback(SslProxyCallback):
         return data
 
     def on_disconnect(self, reason: DisconnectionReason):
-        logger.info(f"[CB] client_fd={self.client_fd} disconnected from {self.host}:{self.port} "
+        logger.info(f"[CB] client_fd={self.client_fd} disconnected from {self.target_addr}:{self.client_addr} "
               f"reason={reason} "
               f"total_bytes_sent={self.total_bytes_sent} "
               f"total_bytes_recv={self.total_bytes_recv}")
