@@ -33,7 +33,8 @@ warnings.filterwarnings("ignore", category=UserWarning, module='pyshark')
 @dataclass
 class ProtocolEvent:
     global_id: int
-    conn_id: int
+    client_addr: str
+    server_addr: str
     protocol: str
     ts: float
     duration: float
@@ -63,10 +64,6 @@ class ProtocolDispatcher:
             "HTTP": "bold green", "MYSQL": "bold cyan", "REDIS": "bold orange3",
             "DNS": "bold magenta", "JSON": "bold yellow", "DEFAULT": "bold white"
         }
-        self.dir_config = {
-            "SENT": {"icon": " ➔  ", "style": "bright_blue", "label": "C->S"},
-            "RECV": {"icon": " ⬅  ", "style": "bright_red", "label": "S->C"}
-        }
         self.lexer_map = {
             "HTTP": "http", "MYSQL": "sql", "JSON": "json", "HTTP2": "http"
         }
@@ -85,10 +82,6 @@ class ProtocolDispatcher:
 
     def get_proto_render(self, protocol: str) -> Text:
         return Text(protocol, style=self.proto_styles.get(protocol, self.proto_styles["DEFAULT"]))
-
-    def get_dir_render(self, direction_tag: str) -> Text:
-        cfg = self.dir_config.get(direction_tag, self.dir_config["SENT"])
-        return Text(f"{cfg['icon']} {cfg['label']}", style=cfg["style"])
 
     def get_latency_render(self, duration: float) -> Text:
         if duration <= 0: return Text("-", style="dim")
@@ -193,7 +186,10 @@ class PySharkTuiPlugin(SslProxyCallback):
             current_id = GLOBAL_COUNTER
 
         event = ProtocolEvent(
-            global_id=current_id, conn_id=f"{self.client_addr[0]}:{self.client_addr[1]}<->{self.target_addr[0]}:{self.target_addr[1]}", protocol=proto_name, 
+            global_id=current_id, 
+            client_addr=f"{self.client_addr[0]}:{self.client_addr[1]}",
+            server_addr=f"{self.target_addr[0]}:{self.target_addr[1]}",
+            protocol=proto_name, 
             ts=ts, duration=duration, direction=tag, summary=summary, 
             detail="\n\n".join(detail_list)
         )
@@ -281,7 +277,7 @@ class DetailScreen(Screen):
         lexer = DISPATCHER.get_lexer(ev.protocol)
         syntax = Syntax(ev.detail, lexer, theme="monokai", word_wrap=True, line_numbers=True)
         
-        title_text = f" {ev.protocol} | Conn:{ev.conn_id} | {ev.summary[:50]} "
+        title_text = f" {ev.protocol} | {ev.client_addr} ⇄ {ev.server_addr} | {ev.summary[:50]} "
         self.query_one("#detail_container").update(
             Panel(syntax, title=title_text, border_style="bright_magenta", padding=(1, 2))
         )
@@ -291,14 +287,12 @@ class AnalyzerTuiApp(App):
     CSS = """
     Screen { background: $background; }
     
-    /* 顶部仪表盘样式 */
     InfoPanel {
         height: auto;
         margin: 0 1;
         dock: top;
     }
 
-    /* 数据表格样式 */
     DataTable { 
         height: 1fr; 
         border: solid $primary; 
@@ -311,7 +305,6 @@ class AnalyzerTuiApp(App):
         text-style: bold;
     }
     
-    /* 详情页样式 */
     #detail_container { 
         padding: 1 2; 
         height: 1fr; 
@@ -334,7 +327,7 @@ class AnalyzerTuiApp(App):
         
         # 2. 中间显示数据表格
         self.table = DataTable(zebra_stripes=True, cursor_type="row")
-        self.table.add_columns("ID", "Conn", "Time", "Proto", "Dir", "Latency", "Summary")
+        self.table.add_columns("ID", "Src ➔ Dst", "Time", "Proto", "Latency", "Summary")
         yield self.table
         
         yield Footer()
@@ -349,12 +342,28 @@ class AnalyzerTuiApp(App):
             try:
                 ev = EVENT_QUEUE.get_nowait()
                 time_str = datetime.fromtimestamp(ev.ts).strftime("%H:%M:%S")
+                c_style = "bold cyan"
+                s_style = "bold yellow" 
+                arrow = " ➔ "
+                if ev.direction == "SENT":
+                    arrow_style = "bright_blue"
+                    flow_text = Text.assemble(
+                        (ev.client_addr, c_style),
+                        (arrow, arrow_style),
+                        (ev.server_addr, s_style)
+                    )
+                else:
+                    arrow_style = "bright_red"
+                    flow_text = Text.assemble(
+                        (ev.server_addr, s_style),
+                        (arrow, arrow_style),
+                        (ev.client_addr, c_style)
+                    )
                 rows_to_add.append((
                     str(ev.global_id), 
-                    str(ev.conn_id),
+                    flow_text,
                     time_str,
                     DISPATCHER.get_proto_render(ev.protocol),
-                    DISPATCHER.get_dir_render(ev.direction),
                     DISPATCHER.get_latency_render(ev.duration),
                     ev.summary
                 ))
